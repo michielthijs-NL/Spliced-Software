@@ -18,17 +18,11 @@ export interface LootItem {
   };
 }
 
-export interface SomaticUpgrades {
-  bruteForce: number;
-  flexibleMass: number;
-  isotopeCore: number;
-}
-
-export interface SkillMutations {
-  bioShotSplit: number;     // 0 = normaal, 1+ = 3-way split & extra projectielen
-  slamAftershock: number;   // 0 = normaal, 1+ = dubbele schokgolf + extra radius
-  dodgePlasmaTrail: number; // 0 = normaal, 1+ = explosieve trail bij dodge
-  meltdownNova: number;     // 0 = normaal, 1+ = grotere aura + HP-drain heal
+export interface SkillTree {
+  bioShot: number;     // Start op 1 (unlocked). Rank 2 = 3-way split, Rank 3+ = 5-way + extra DMG
+  phaseDodge: number;  // Start op 1 (unlocked). Rank 2+ = Plasma Trail + lagere mana-kost
+  coneSlam: number;    // Start op 0 (locked). Rank 1 = ontgrendelt Cone-Slam, Rank 2+ = Seismic Aftershock
+  meltdownUlt: number; // Start op 0 (locked). Rank 1 = ontgrendelt Meltdown Ult, Rank 2+ = Supernova Siphon
 }
 
 export interface DungeonDef {
@@ -148,8 +142,7 @@ export interface HudSnapshot {
   worldTier: number;
   enemiesRemaining: number;
   manaCosts: { slam: number; dodge: number };
-  upgrades: SomaticUpgrades;
-  skillMutations: SkillMutations;
+  skills: SkillTree;
   equipped: Record<ItemSlot, LootItem | null>;
   inventory: LootItem[];
   runOutcome: RunOutcome;
@@ -212,7 +205,7 @@ export class ArenaScene extends Phaser.Scene {
   private exitDoorOpen = false;
   private sceneReady = false;
 
-  // Blijvende Karakter-progressie
+  // Blijvende Karakter-progressie (geen losse stats, groei via Level + DNA Skills + Gear)
   private baseMaxHp = 120;
   private hp = 120;
   private baseMaxEnergy = 100;
@@ -230,17 +223,12 @@ export class ArenaScene extends Phaser.Scene {
   private worldTier = 1;
   private activeDungeon: DungeonDef = DUNGEONS[0];
 
-  private upgrades: SomaticUpgrades = {
-    bruteForce: 0,
-    flexibleMass: 0,
-    isotopeCore: 0,
-  };
-
-  private skillMutations: SkillMutations = {
-    bioShotSplit: 0,
-    slamAftershock: 0,
-    dodgePlasmaTrail: 0,
-    meltdownNova: 0,
+  // Level 1 start met enkel Bio-Shot (1) en Phase Dodge (1)
+  private skills: SkillTree = {
+    bioShot: 1,
+    phaseDodge: 1,
+    coneSlam: 0,
+    meltdownUlt: 0,
   };
 
   private equipped: Record<ItemSlot, LootItem | null> = {
@@ -259,7 +247,6 @@ export class ArenaScene extends Phaser.Scene {
     lootFound: 0,
   };
 
-  // Timers (geen skill cooldowns meer, alleen fire-rate & i-frames)
   private lastShotAt = 0;
   private invulnerableUntil = 0;
   private lastHudPush = 0;
@@ -318,20 +305,10 @@ export class ArenaScene extends Phaser.Scene {
     this.startDungeon(this.activeDungeon.id);
   }
 
-  public applyUpgrade(stat: keyof SomaticUpgrades): void {
+  public upgradeSkill(skill: keyof SkillTree): void {
     if (this.dnaPoints <= 0) return;
     this.dnaPoints -= 1;
-    this.upgrades[stat] += 1;
-    if (stat === 'bruteForce') {
-      this.hp = Math.min(this.getMaxHp(), this.hp + 35);
-    }
-    this.pushHud(true);
-  }
-
-  public mutateSkill(skill: keyof SkillMutations): void {
-    if (this.dnaPoints <= 0) return;
-    this.dnaPoints -= 1;
-    this.skillMutations[skill] += 1;
+    this.skills[skill] += 1;
     this.pushHud(true);
   }
 
@@ -359,21 +336,22 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getSlamManaCost(): number {
-    return Math.max(12, 25 - this.upgrades.flexibleMass * 2);
+    return Math.max(15, 25 - Math.max(0, this.skills.coneSlam - 1) * 2);
   }
 
   private getDodgeManaCost(): number {
-    return Math.max(10, 20 - this.upgrades.flexibleMass * 2);
+    return Math.max(10, 20 - Math.max(0, this.skills.phaseDodge - 1) * 2);
   }
 
   private getMaxHp(): number {
     const cryoBonus = this.liberatedZones.includes('cryo') ? 25 : 0;
     const crimsonBonus = this.liberatedZones.includes('crimson') ? 45 : 0;
+    const levelScaling = (this.level - 1) * 12;
     return (
       this.baseMaxHp +
+      levelScaling +
       cryoBonus +
       crimsonBonus +
-      this.upgrades.bruteForce * 35 +
       (this.equipped.ARMOR?.stats.maxHpBonus ?? 0) +
       (this.equipped.INJECTOR?.stats.maxHpBonus ?? 0)
     );
@@ -381,8 +359,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private getMoveSpeed(): number {
     return (
-      245 +
-      this.upgrades.flexibleMass * 22 +
+      250 +
+      Math.max(0, this.skills.phaseDodge - 1) * 14 +
       (this.equipped.ARMOR?.stats.speedBonus ?? 0) +
       (this.equipped.INJECTOR?.stats.speedBonus ?? 0)
     );
@@ -391,11 +369,12 @@ export class ArenaScene extends Phaser.Scene {
   private getShotDamage(): number {
     const foundryBonus = this.liberatedZones.includes('foundry') ? 5 : 0;
     const voidBonus = this.liberatedZones.includes('void') ? 8 : 0;
+    const skillBonus = (this.skills.bioShot - 1) * 6;
     return (
-      14 +
+      15 +
+      skillBonus +
       foundryBonus +
       voidBonus +
-      this.upgrades.isotopeCore * 9 +
       (this.equipped.WEAPON?.stats.damageBonus ?? 0) +
       (this.equipped.INJECTOR?.stats.damageBonus ?? 0)
     );
@@ -419,7 +398,7 @@ export class ArenaScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.runOutcome !== 'PLAYING') return;
       if (pointer.rightButtonDown()) {
-        this.tryStretchSlam();
+        this.tryConeSlam(pointer);
       } else if (pointer.leftButtonDown()) {
         this.tryBioShot(pointer);
       }
@@ -541,7 +520,7 @@ export class ArenaScene extends Phaser.Scene {
       .text(
         18,
         648,
-        `WASD: Bewegen | LMB: Bio-Shot | RMB: Slam (Mana) | SPATIE: Dodge (Mana) | E: Meltdown | [K] DNA Skills`,
+        `WASD: Bewegen | LMB: Bio-Shot | SPATIE: Dodge | [K] DNA Skills (Ontgrendel Cone-Slam & Meltdown)`,
         {
           fontFamily: 'monospace',
           fontSize: '12px',
@@ -566,7 +545,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createPlayer(x: number, y: number): void {
-    const auraRadius = 86 + this.skillMutations.meltdownNova * 38;
+    const auraRadius = 90 + Math.max(0, this.skills.meltdownUlt - 1) * 38;
     this.meltdownAura = this.add.circle(0, 0, auraRadius, 0xf97316, 0.22);
     this.meltdownAura.setStrokeStyle(2, 0xfb923c, 0.85);
     this.meltdownAura.setVisible(false);
@@ -688,7 +667,6 @@ export class ArenaScene extends Phaser.Scene {
 
     const dt = delta / 1000;
 
-    // Bio-Energy (Mana) regeneratie
     const regenRate = 9 + (this.equipped.INJECTOR?.stats.energyRegenBonus ?? 0);
     this.energy = Math.min(this.baseMaxEnergy, this.energy + regenRate * dt);
 
@@ -719,12 +697,10 @@ export class ArenaScene extends Phaser.Scene {
       this.playerBody.setVelocity(0, 0);
     }
 
-    // SPATIE = Phase Dodge (geen cooldown, enkel mana kost)
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.tryPhaseDodge(time, vx, vy);
     }
 
-    // E = Meltdown Ult
     if (Phaser.Input.Keyboard.JustDown(this.eKey)) {
       this.tryActivateMeltdown(time);
     }
@@ -747,87 +723,105 @@ export class ArenaScene extends Phaser.Scene {
 
   private tryBioShot(pointer: Phaser.Input.Pointer): void {
     const now = this.time.now;
-    const fireInterval = Math.max(120, 250 - this.upgrades.flexibleMass * 22);
+    const fireInterval = Math.max(140, 250 - (this.skills.bioShot - 1) * 18);
     if (now - this.lastShotAt < fireInterval) return;
     this.lastShotAt = now;
 
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, worldPoint.x, worldPoint.y);
 
-    // DNA Skill Mutatie: Bio-Shot Split (1 schot -> 3 of 5 in een waaier)
-    const splitRank = this.skillMutations.bioShotSplit;
+    // Rank 1 = 1 schot, Rank 2 = 3-way split, Rank 3+ = 5-way split
+    const rank = this.skills.bioShot;
     const angles =
-      splitRank === 0
+      rank <= 1
         ? [baseAngle]
-        : splitRank === 1
+        : rank === 2
         ? [baseAngle - 0.16, baseAngle, baseAngle + 0.16]
         : [baseAngle - 0.26, baseAngle - 0.13, baseAngle, baseAngle + 0.13, baseAngle + 0.26];
 
-    const dmgPerShot = splitRank === 0 ? this.getShotDamage() : Math.round(this.getShotDamage() * (0.72 + splitRank * 0.1));
+    const dmgPerShot = rank <= 1 ? this.getShotDamage() : Math.round(this.getShotDamage() * (0.75 + (rank - 1) * 0.1));
+
+    // Kortere range (560ms bij 610px/s = ~340px bereik)
+    const shortRangeLifeMs = 560;
 
     for (const angle of angles) {
-      const bullet = this.add.circle(this.player.x, this.player.y, splitRank > 0 ? 5.5 : 5, splitRank > 0 ? 0x67e8f9 : 0x38bdf8);
+      const bullet = this.add.circle(this.player.x, this.player.y, rank > 1 ? 5.5 : 5, rank > 1 ? 0x67e8f9 : 0x38bdf8);
       this.physics.add.existing(bullet);
       const body = bullet.body as Phaser.Physics.Arcade.Body;
-      body.setVelocity(Math.cos(angle) * 630, Math.sin(angle) * 630);
+      body.setVelocity(Math.cos(angle) * 610, Math.sin(angle) * 610);
 
       this.projectiles.push({
         sprite: bullet,
         body,
         damage: dmgPerShot,
         fromPlayer: true,
-        expiresAt: now + 1300,
+        expiresAt: now + shortRangeLifeMs,
       });
     }
   }
 
-  private tryStretchSlam(): void {
+  private drawConeEffect(x: number, y: number, aimAngle: number, radius: number, halfAngleRad: number, fillColor: number, strokeColor: number): void {
+    const gfx = this.add.graphics();
+    gfx.fillStyle(fillColor, 0.34);
+    gfx.lineStyle(3, strokeColor, 0.92);
+    gfx.beginPath();
+    gfx.moveTo(x, y);
+    gfx.arc(x, y, radius, aimAngle - halfAngleRad, aimAngle + halfAngleRad, false);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.strokePath();
+
+    this.tweens.add({
+      targets: gfx,
+      alpha: 0,
+      duration: 280,
+      onComplete: () => gfx.destroy(),
+    });
+  }
+
+  private applyConeDamage(originX: number, originY: number, aimAngle: number, radius: number, halfAngleRad: number, damage: number): void {
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      const dist = Phaser.Math.Distance.Between(originX, originY, e.sprite.x, e.sprite.y);
+      if (dist <= radius) {
+        const angleToEnemy = Phaser.Math.Angle.Between(originX, originY, e.sprite.x, e.sprite.y);
+        const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(angleToEnemy - aimAngle));
+        if (angleDiff <= halfAngleRad) {
+          this.damageEnemy(i, damage);
+        }
+      }
+    }
+  }
+
+  private tryConeSlam(pointer: Phaser.Input.Pointer): void {
+    // Moet eerst op de DNA-helix vrijgespeeld zijn (Rank >= 1)
+    if (this.skills.coneSlam <= 0) return;
+
     const cost = this.getSlamManaCost();
     if (this.energy < cost) return;
     this.energy -= cost;
     this.heat = Math.min(100, this.heat + 16);
 
-    const aftershockRank = this.skillMutations.slamAftershock;
-    const radius = 115 + this.upgrades.bruteForce * 14 + aftershockRank * 32;
-    const slamDmg = 34 + this.upgrades.bruteForce * 22 + aftershockRank * 20;
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const aimAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, worldPoint.x, worldPoint.y);
 
-    const ring = this.add.circle(this.player.x, this.player.y, 20, 0xf43f5e, 0.26).setStrokeStyle(3, 0xfb7185);
-    this.tweens.add({
-      targets: ring,
-      radius,
-      alpha: 0,
-      duration: 280,
-      onComplete: () => ring.destroy(),
-    });
+    const rank = this.skills.coneSlam;
+    const coneRadius = 185 + (rank - 1) * 35;
+    const halfConeRad = Phaser.Math.DegToRad(38); // 76 graden totale kegel voor je uit
+    const slamDmg = 46 + (rank - 1) * 24;
 
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const e = this.enemies[i];
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, e.sprite.x, e.sprite.y) <= radius) {
-        this.damageEnemy(i, slamDmg);
-      }
-    }
+    this.drawConeEffect(this.player.x, this.player.y, aimAngle, coneRadius, halfConeRad, 0xf43f5e, 0xfb7185);
+    this.applyConeDamage(this.player.x, this.player.y, aimAngle, coneRadius, halfConeRad, slamDmg);
 
-    // DNA Skill Mutatie: Seismic Aftershock (tweede explosiering na 220ms)
-    if (aftershockRank > 0) {
+    // Rank 2+: tweede grotere Seismic Aftershock cone na 210ms
+    if (rank >= 2) {
       const sx = this.player.x;
       const sy = this.player.y;
-      this.time.delayedCall(220, () => {
+      this.time.delayedCall(210, () => {
         if (this.runOutcome !== 'PLAYING') return;
-        const echoRadius = radius * 1.25;
-        const echoRing = this.add.circle(sx, sy, 25, 0xf59e0b, 0.22).setStrokeStyle(3, 0xfbbf24);
-        this.tweens.add({
-          targets: echoRing,
-          radius: echoRadius,
-          alpha: 0,
-          duration: 300,
-          onComplete: () => echoRing.destroy(),
-        });
-        for (let i = this.enemies.length - 1; i >= 0; i--) {
-          const e = this.enemies[i];
-          if (Phaser.Math.Distance.Between(sx, sy, e.sprite.x, e.sprite.y) <= echoRadius) {
-            this.damageEnemy(i, Math.round(slamDmg * 0.65));
-          }
-        }
+        const echoRadius = coneRadius * 1.25;
+        this.drawConeEffect(sx, sy, aimAngle, echoRadius, halfConeRad, 0xf59e0b, 0xfbbf24);
+        this.applyConeDamage(sx, sy, aimAngle, echoRadius, halfConeRad, Math.round(slamDmg * 0.65));
       });
     }
 
@@ -835,6 +829,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private tryPhaseDodge(time: number, vx: number, vy: number): void {
+    if (this.skills.phaseDodge <= 0) return;
+
     const cost = this.getDodgeManaCost();
     if (this.energy < cost) return;
 
@@ -866,11 +862,11 @@ export class ArenaScene extends Phaser.Scene {
       onComplete: () => ghost.destroy(),
     });
 
-    // DNA Skill Mutatie: Plasma Trail (laat een explosieve plasma-nova achter bij vertrekpunt)
-    const trailRank = this.skillMutations.dodgePlasmaTrail;
-    if (trailRank > 0) {
-      const blastRadius = 75 + trailRank * 22;
-      const blastDmg = 24 + trailRank * 18 + this.upgrades.isotopeCore * 6;
+    // Rank 2+: Plasma Trail explosie bij vertrekpunt van dodge
+    if (this.skills.phaseDodge >= 2) {
+      const extraRank = this.skills.phaseDodge - 1;
+      const blastRadius = 75 + extraRank * 22;
+      const blastDmg = 26 + extraRank * 18;
       const nova = this.add.circle(startX, startY, blastRadius, 0x14b8a6, 0.32).setStrokeStyle(2, 0x5eead4);
       this.tweens.add({
         targets: nova,
@@ -893,10 +889,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private tryActivateMeltdown(time: number): void {
+    // Moet eerst op de DNA-helix vrijgespeeld zijn (Rank >= 1)
+    if (this.skills.meltdownUlt <= 0) return;
     if (this.meltdownActive || this.heat < 80) return;
+
+    const extraRank = this.skills.meltdownUlt - 1;
     this.meltdownActive = true;
-    this.meltdownEndsAt = time + 6500 + this.skillMutations.meltdownNova * 1200;
-    const auraRadius = 86 + this.skillMutations.meltdownNova * 38;
+    this.meltdownEndsAt = time + 6500 + extraRank * 1200;
+    const auraRadius = 90 + extraRank * 38;
     this.meltdownAura.setRadius(auraRadius);
     this.meltdownAura.setVisible(true);
     this.cameras.main.shake(180, 0.005);
@@ -904,9 +904,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private applyMeltdownAuraDamage(dt: number): void {
-    const novaRank = this.skillMutations.meltdownNova;
-    const radius = 95 + novaRank * 38;
-    const dps = 45 + this.upgrades.isotopeCore * 18 + novaRank * 25;
+    const extraRank = Math.max(0, this.skills.meltdownUlt - 1);
+    const radius = 95 + extraRank * 38;
+    const dps = 50 + extraRank * 26;
     let hitAny = false;
 
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -917,8 +917,9 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    if (hitAny && novaRank > 0) {
-      this.hp = Math.min(this.getMaxHp(), this.hp + novaRank * 8 * dt);
+    // Rank 2+: Supernova Siphon herstelt HP terwijl vijanden branden
+    if (hitAny && extraRank > 0) {
+      this.hp = Math.min(this.getMaxHp(), this.hp + extraRank * 9 * dt);
     }
   }
 
@@ -1204,8 +1205,7 @@ export class ArenaScene extends Phaser.Scene {
       worldTier: this.worldTier,
       enemiesRemaining: this.enemies.length,
       manaCosts: { slam: this.getSlamManaCost(), dodge: this.getDodgeManaCost() },
-      upgrades: { ...this.upgrades },
-      skillMutations: { ...this.skillMutations },
+      skills: { ...this.skills },
       equipped: { ...this.equipped },
       inventory: [...this.inventory],
       runOutcome: this.runOutcome,

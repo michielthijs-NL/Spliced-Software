@@ -4,8 +4,7 @@ import {
   ArenaScene,
   DUNGEONS,
   type HudSnapshot,
-  type SomaticUpgrades,
-  type SkillMutations,
+  type SkillTree,
   type LootItem,
   type ItemSlot,
   type ItemRarity,
@@ -28,8 +27,7 @@ const initialHud: HudSnapshot = {
   worldTier: 1,
   enemiesRemaining: 19,
   manaCosts: { slam: 25, dodge: 20 },
-  upgrades: { bruteForce: 0, flexibleMass: 0, isotopeCore: 0 },
-  skillMutations: { bioShotSplit: 0, slamAftershock: 0, dodgePlasmaTrail: 0, meltdownNova: 0 },
+  skills: { bioShot: 1, phaseDodge: 1, coneSlam: 0, meltdownUlt: 0 },
   equipped: { WEAPON: null, ARMOR: null, INJECTOR: null },
   inventory: [],
   runOutcome: 'PLAYING',
@@ -91,47 +89,47 @@ const slotMeta: Record<ItemSlot, { label: string; icon: string }> = {
 };
 
 const HELIX_SKILLS: {
-  key: keyof SkillMutations;
+  key: keyof SkillTree;
   hotkey: string;
   baseName: string;
-  mutationName: string;
-  desc: string;
+  unlockDesc: string;
+  evolveDesc: string;
   color: string;
   strand: 'LEFT' | 'RIGHT';
 }[] = [
   {
-    key: 'bioShotSplit',
+    key: 'bioShot',
     hotkey: '[LMB]',
-    baseName: 'Bio-Shot',
-    mutationName: 'Helix Prism Split',
-    desc: 'Rank 1: vuurt 3 bio-projectielen in een waaier. Rank 2+: 5 projectielen met hogere schade.',
+    baseName: 'Bio-Shot (Short-Range)',
+    unlockDesc: 'Standaard kort-afstand bio-projectiel (+8 Mana per hit).',
+    evolveDesc: 'Rank 2: vuurt 3 projectielen in een waaier. Rank 3+: 5 projectielen + hogere schade.',
     color: '#38bdf8',
     strand: 'LEFT',
   },
   {
-    key: 'slamAftershock',
+    key: 'coneSlam',
     hotkey: '[RMB]',
-    baseName: 'Stretch-Slam',
-    mutationName: 'Seismic Aftershock',
-    desc: 'Vergroot de slam-radius (+32px) en wekt na 0.2s een tweede schokgolf op zonder extra mana.',
+    baseName: 'Cone-Slam',
+    unlockDesc: 'ONTGRENDEL SKILL (Rank 1): Slaat een krachtige 76° kegel-schokgolf richting je cursor.',
+    evolveDesc: 'Rank 2+: wekt na 0.2s een tweede grotere Seismic Aftershock cone op en verlaagt mana-kost.',
     color: '#fb7185',
     strand: 'RIGHT',
   },
   {
-    key: 'dodgePlasmaTrail',
+    key: 'phaseDodge',
     hotkey: '[SPATIE]',
     baseName: 'Phase Dodge',
-    mutationName: 'Isotope Wake Nova',
-    desc: 'Laat bij elke dodge een explosieve plasma-wolk achter die omliggende vijanden verschroeit.',
+    unlockDesc: 'Standaard ontwijk-dash met korte onkwetsbaarheid.',
+    evolveDesc: 'Rank 2+: laat een explosieve Plasma-Nova achter bij je vertrekpunt + hogere loopsnelheid.',
     color: '#2dd4bf',
     strand: 'LEFT',
   },
   {
-    key: 'meltdownNova',
+    key: 'meltdownUlt',
     hotkey: '[E]',
-    baseName: 'Meltdown Ult',
-    mutationName: 'Supernova Siphon',
-    desc: 'Vergroot je stralingsaura (+38px), verlengt Meltdown en heelt HP zolang vijanden branden.',
+    baseName: 'Meltdown Ultimate',
+    unlockDesc: 'ONTGRENDEL SKILL (Rank 1): Activeert nucleaire stralingsaura vanaf 80% Heat.',
+    evolveDesc: 'Rank 2+: vergroot de aura (+38px), verlengt duur en heelt HP terwijl vijanden branden.',
     color: '#fb923c',
     strand: 'RIGHT',
   },
@@ -141,7 +139,7 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<ArenaScene | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(initialHud);
-  const [activeModal, setActiveModal] = useState<'none' | 'inventory' | 'levelup' | 'skills'>('none');
+  const [activeModal, setActiveModal] = useState<'none' | 'inventory' | 'skills'>('none');
   const [showWorldMap, setShowWorldMap] = useState<boolean>(true);
   const [selectedDungeonId, setSelectedDungeonId] = useState<string>(DUNGEONS[0].id);
 
@@ -151,9 +149,6 @@ export default function App() {
       if (k === 'i') {
         e.preventDefault();
         setActiveModal((prev) => (prev === 'inventory' ? 'none' : 'inventory'));
-      } else if (k === 'j') {
-        e.preventDefault();
-        setActiveModal((prev) => (prev === 'levelup' ? 'none' : 'levelup'));
       } else if (k === 'k') {
         e.preventDefault();
         setActiveModal((prev) => (prev === 'skills' ? 'none' : 'skills'));
@@ -200,8 +195,7 @@ export default function App() {
     sceneRef.current?.startDungeon(dungeonId);
   };
 
-  const handleSplice = (stat: keyof SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
-  const handleMutateSkill = (skill: keyof SkillMutations) => sceneRef.current?.mutateSkill(skill);
+  const handleUpgradeSkill = (skill: keyof SkillTree) => sceneRef.current?.upgradeSkill(skill);
   const handleEquip = (itemId: string) => sceneRef.current?.equipItem(itemId);
   const handleSalvage = (itemId: string) => sceneRef.current?.salvageItem(itemId);
 
@@ -248,7 +242,7 @@ export default function App() {
                 border: `1px solid ${showWorldMap ? '#38bdf8' : '#475569'}`,
                 color: '#f8fafc',
                 borderRadius: 10,
-                padding: '8px 12px',
+                padding: '8px 14px',
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -264,7 +258,7 @@ export default function App() {
                 border: `1px solid ${activeModal === 'inventory' ? '#38bdf8' : '#334155'}`,
                 color: '#f8fafc',
                 borderRadius: 10,
-                padding: '8px 12px',
+                padding: '8px 14px',
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -280,30 +274,11 @@ export default function App() {
             <button
               onClick={() => setActiveModal((prev) => (prev === 'skills' ? 'none' : 'skills'))}
               style={{
-                backgroundColor: activeModal === 'skills' ? '#0f766e' : '#0f172a',
-                border: `1px solid ${activeModal === 'skills' || hud.dnaPoints > 0 ? '#2dd4bf' : '#334155'}`,
+                backgroundColor: hud.dnaPoints > 0 ? '#0f766e' : activeModal === 'skills' ? '#115e59' : '#0f172a',
+                border: `1px solid ${hud.dnaPoints > 0 || activeModal === 'skills' ? '#2dd4bf' : '#334155'}`,
                 color: '#f8fafc',
                 borderRadius: 10,
-                padding: '8px 12px',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <span>[K] DNA SKILLS</span>
-            </button>
-
-            <button
-              onClick={() => setActiveModal((prev) => (prev === 'levelup' ? 'none' : 'levelup'))}
-              style={{
-                backgroundColor: hud.dnaPoints > 0 ? '#7e22ce' : activeModal === 'levelup' ? '#581c87' : '#0f172a',
-                border: `1px solid ${hud.dnaPoints > 0 || activeModal === 'levelup' ? '#c084fc' : '#334155'}`,
-                color: '#f8fafc',
-                borderRadius: 10,
-                padding: '8px 12px',
+                padding: '8px 14px',
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -312,7 +287,7 @@ export default function App() {
                 gap: 8,
               }}
             >
-              <span>[J] STATS</span>
+              <span>[K] DNA SKILLS</span>
               {hud.dnaPoints > 0 && (
                 <span
                   style={{
@@ -636,7 +611,7 @@ export default function App() {
                     )}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={() => setActiveModal('inventory')}
                           style={{
@@ -644,13 +619,13 @@ export default function App() {
                             color: '#e2e8f0',
                             border: '1px solid #334155',
                             borderRadius: 8,
-                            padding: '9px 10px',
-                            fontSize: 11,
+                            padding: '10px 12px',
+                            fontSize: 12,
                             fontWeight: 700,
                             cursor: 'pointer',
                           }}
                         >
-                          Gear [I]
+                          Gear &amp; Rugzak [I]
                         </button>
                         <button
                           onClick={() => setActiveModal('skills')}
@@ -659,28 +634,13 @@ export default function App() {
                             color: '#5eead4',
                             border: '1px solid #0f766e',
                             borderRadius: 8,
-                            padding: '9px 10px',
-                            fontSize: 11,
+                            padding: '10px 12px',
+                            fontSize: 12,
                             fontWeight: 700,
                             cursor: 'pointer',
                           }}
                         >
-                          DNA Skills [K]
-                        </button>
-                        <button
-                          onClick={() => setActiveModal('levelup')}
-                          style={{
-                            backgroundColor: '#1e293b',
-                            color: '#e2e8f0',
-                            border: '1px solid #334155',
-                            borderRadius: 8,
-                            padding: '9px 10px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Stats [J] {hud.dnaPoints > 0 ? `(+${hud.dnaPoints})` : ''}
+                          DNA Skills [K] {hud.dnaPoints > 0 ? `(+${hud.dnaPoints})` : ''}
                         </button>
                       </div>
 
@@ -693,7 +653,7 @@ export default function App() {
                           color: '#ffffff',
                           border: 'none',
                           borderRadius: 10,
-                          padding: '12px 18px',
+                          padding: '12px 20px',
                           fontSize: 13,
                           fontWeight: 800,
                           cursor: 'pointer',
@@ -919,7 +879,7 @@ export default function App() {
             </div>
           )}
 
-          {/* [K] DNA-STRING SKILL TREE MODAL */}
+          {/* [K] DNA-STRING SKILL TREE MODAL (ENIGE LEVEL-UP BESTEMMING) */}
           {activeModal === 'skills' && (
             <div
               style={{
@@ -938,7 +898,7 @@ export default function App() {
               <div
                 style={{
                   width: '100%',
-                  maxWidth: 880,
+                  maxWidth: 900,
                   backgroundColor: '#0f172a',
                   border: '1px solid #2dd4bf66',
                   borderRadius: 16,
@@ -958,11 +918,11 @@ export default function App() {
                 >
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 900, color: '#2dd4bf' }}>
-                      GENETIC SKILL HELIX &bull; SKILL EVOLUTIES (GEEN COOLDOWNS)
+                      GENETIC SKILL HELIX &bull; LEVEL {hud.level} SKILL PROGRESSIE
                     </div>
                     <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 2 }}>
-                      Beschikbare DNA Punten: <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull; Alle skills
-                      gebruiken enkel Bio-Energy (Mana)
+                      Beschikbare DNA Punten: <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull; XP:{' '}
+                      {hud.xp} / {hud.xpToNext} &bull; Ontgrendel &amp; evolueer je skills via DNA
                     </div>
                   </div>
                   <button
@@ -982,18 +942,19 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* 3-Koloms DNA-String Layout: Linker Streng | Centrale DNA Helix | Rechter Streng */}
+                {/* 3-Koloms DNA-String Layout */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', gap: 14, alignItems: 'center' }}>
-                  {/* Linker DNA-streng (Bio-Shot & Dodge) */}
+                  {/* Linker DNA-streng (Bio-Shot & Phase Dodge) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {HELIX_SKILLS.filter((s) => s.strand === 'LEFT').map((sk) => {
-                      const rank = hud.skillMutations[sk.key];
+                      const rank = hud.skills[sk.key];
+                      const isUnlocked = rank > 0;
                       return (
                         <div
                           key={sk.key}
                           style={{
-                            border: `1px solid ${rank > 0 ? sk.color : '#334155'}`,
-                            backgroundColor: rank > 0 ? 'rgba(15, 118, 110, 0.22)' : '#090d16',
+                            border: `1px solid ${isUnlocked ? sk.color : '#334155'}`,
+                            backgroundColor: isUnlocked ? 'rgba(15, 118, 110, 0.22)' : '#090d16',
                             borderRadius: 12,
                             padding: 13,
                           }}
@@ -1008,19 +969,17 @@ export default function App() {
                                 fontWeight: 800,
                                 padding: '2px 7px',
                                 borderRadius: 999,
-                                backgroundColor: rank > 0 ? sk.color : '#1e293b',
-                                color: rank > 0 ? '#060a12' : '#94a3b8',
+                                backgroundColor: isUnlocked ? sk.color : '#1e293b',
+                                color: isUnlocked ? '#060a12' : '#94a3b8',
                               }}
                             >
-                              {rank > 0 ? `MUTATED RANK ${rank}` : 'BASE FORM'}
+                              {isUnlocked ? `RANK ${rank}` : 'LOCKED'}
                             </span>
                           </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 4 }}>
-                            {sk.mutationName}
-                          </div>
-                          <div style={{ fontSize: 11.5, color: '#cbd5e1', marginTop: 4, lineHeight: 1.4 }}>{sk.desc}</div>
+                          <div style={{ fontSize: 12, color: '#e2e8f0', marginTop: 6 }}>{sk.unlockDesc}</div>
+                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>{sk.evolveDesc}</div>
                           <button
-                            onClick={() => handleMutateSkill(sk.key)}
+                            onClick={() => handleUpgradeSkill(sk.key)}
                             disabled={hud.dnaPoints <= 0}
                             style={{
                               marginTop: 10,
@@ -1036,7 +995,7 @@ export default function App() {
                               opacity: hud.dnaPoints > 0 ? 1 : 0.35,
                             }}
                           >
-                            + Splice DNA Strand (1 DNA)
+                            {isUnlocked ? `+ Evolueer naar Rank ${rank + 1} (1 DNA)` : 'Ontgrendel Skill (1 DNA)'}
                           </button>
                         </div>
                       );
@@ -1046,7 +1005,6 @@ export default function App() {
                   {/* Midden: Visuele DNA Dubbele Helix SVG */}
                   <div style={{ textAlign: 'center' }}>
                     <svg viewBox="0 0 140 340" style={{ width: '100%', maxWidth: 140, height: 'auto' }}>
-                      {/* Helix strengen */}
                       <path
                         d="M30,15 C110,65 110,115 30,170 C-10,225 110,275 30,325"
                         fill="none"
@@ -1060,7 +1018,6 @@ export default function App() {
                         strokeWidth="4"
                       />
 
-                      {/* Base-paren (dwarsverbindingen) */}
                       {[35, 70, 105, 140, 170, 205, 240, 275, 308].map((y, idx) => (
                         <line
                           key={y}
@@ -1074,12 +1031,11 @@ export default function App() {
                         />
                       ))}
 
-                      {/* 4 Actieve Knooppunten op de Helix */}
                       <circle
                         cx="32"
                         cy="62"
                         r="11"
-                        fill={hud.skillMutations.bioShotSplit > 0 ? '#38bdf8' : '#090d16'}
+                        fill={hud.skills.bioShot > 0 ? '#38bdf8' : '#090d16'}
                         stroke="#38bdf8"
                         strokeWidth="3"
                       />
@@ -1087,7 +1043,7 @@ export default function App() {
                         cx="108"
                         cy="132"
                         r="11"
-                        fill={hud.skillMutations.slamAftershock > 0 ? '#fb7185' : '#090d16'}
+                        fill={hud.skills.coneSlam > 0 ? '#fb7185' : '#090d16'}
                         stroke="#fb7185"
                         strokeWidth="3"
                       />
@@ -1095,7 +1051,7 @@ export default function App() {
                         cx="32"
                         cy="208"
                         r="11"
-                        fill={hud.skillMutations.dodgePlasmaTrail > 0 ? '#2dd4bf' : '#090d16'}
+                        fill={hud.skills.phaseDodge > 0 ? '#2dd4bf' : '#090d16'}
                         stroke="#2dd4bf"
                         strokeWidth="3"
                       />
@@ -1103,24 +1059,25 @@ export default function App() {
                         cx="108"
                         cy="278"
                         r="11"
-                        fill={hud.skillMutations.meltdownNova > 0 ? '#fb923c' : '#090d16'}
+                        fill={hud.skills.meltdownUlt > 0 ? '#fb923c' : '#090d16'}
                         stroke="#fb923c"
                         strokeWidth="3"
                       />
                     </svg>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>DOUBLE HELIX</div>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>DNA HELIX</div>
                   </div>
 
-                  {/* Rechter DNA-streng (Stretch-Slam & Meltdown Ult) */}
+                  {/* Rechter DNA-streng (Cone-Slam & Meltdown Ult) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {HELIX_SKILLS.filter((s) => s.strand === 'RIGHT').map((sk) => {
-                      const rank = hud.skillMutations[sk.key];
+                      const rank = hud.skills[sk.key];
+                      const isUnlocked = rank > 0;
                       return (
                         <div
                           key={sk.key}
                           style={{
-                            border: `1px solid ${rank > 0 ? sk.color : '#334155'}`,
-                            backgroundColor: rank > 0 ? 'rgba(136, 19, 55, 0.22)' : '#090d16',
+                            border: `1px solid ${isUnlocked ? sk.color : '#334155'}`,
+                            backgroundColor: isUnlocked ? 'rgba(136, 19, 55, 0.22)' : '#090d16',
                             borderRadius: 12,
                             padding: 13,
                           }}
@@ -1135,19 +1092,17 @@ export default function App() {
                                 fontWeight: 800,
                                 padding: '2px 7px',
                                 borderRadius: 999,
-                                backgroundColor: rank > 0 ? sk.color : '#1e293b',
-                                color: rank > 0 ? '#060a12' : '#94a3b8',
+                                backgroundColor: isUnlocked ? sk.color : '#1e293b',
+                                color: isUnlocked ? '#060a12' : '#fb7185',
                               }}
                             >
-                              {rank > 0 ? `MUTATED RANK ${rank}` : 'BASE FORM'}
+                              {isUnlocked ? `RANK ${rank}` : 'LOCKED'}
                             </span>
                           </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 4 }}>
-                            {sk.mutationName}
-                          </div>
-                          <div style={{ fontSize: 11.5, color: '#cbd5e1', marginTop: 4, lineHeight: 1.4 }}>{sk.desc}</div>
+                          <div style={{ fontSize: 12, color: '#e2e8f0', marginTop: 6 }}>{sk.unlockDesc}</div>
+                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>{sk.evolveDesc}</div>
                           <button
-                            onClick={() => handleMutateSkill(sk.key)}
+                            onClick={() => handleUpgradeSkill(sk.key)}
                             disabled={hud.dnaPoints <= 0}
                             style={{
                               marginTop: 10,
@@ -1163,7 +1118,7 @@ export default function App() {
                               opacity: hud.dnaPoints > 0 ? 1 : 0.35,
                             }}
                           >
-                            + Splice DNA Strand (1 DNA)
+                            {isUnlocked ? `+ Evolueer naar Rank ${rank + 1} (1 DNA)` : 'Ontgrendel Skill (1 DNA)'}
                           </button>
                         </div>
                       );
@@ -1361,133 +1316,9 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {/* [J] STAT ATTRIBUTES MODAL */}
-          {activeModal === 'levelup' && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: 'rgba(6, 10, 18, 0.88)',
-                backdropFilter: 'blur(6px)',
-                borderRadius: 12,
-                padding: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 55,
-              }}
-            >
-              <div
-                style={{
-                  width: '100%',
-                  maxWidth: 560,
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #a855f788',
-                  borderRadius: 14,
-                  padding: 20,
-                  boxShadow: '0 24px 60px rgba(0,0,0,0.85)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderBottom: '1px solid #1e293b',
-                    paddingBottom: 10,
-                    marginBottom: 14,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: '#c084fc' }}>
-                      LEVEL {hud.level} &bull; BASE ATTRIBUTES
-                    </div>
-                    <div style={{ fontSize: 12, color: '#e2e8f0', marginTop: 2 }}>
-                      Beschikbare DNA Punten: <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull; XP:{' '}
-                      {hud.xp} / {hud.xpToNext}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setActiveModal('none')}
-                    style={{
-                      backgroundColor: '#1e293b',
-                      color: '#e2e8f0',
-                      border: '1px solid #334155',
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Sluiten [J / ESC]
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[
-                    {
-                      key: 'bruteForce' as const,
-                      title: `Brute Force (Rank ${hud.upgrades.bruteForce})`,
-                      desc: '+35 Max HP, +22 Stretch-Slam DMG & +14px schokgolf-radius',
-                      accent: '#f43f5e',
-                      bg: 'rgba(136, 19, 55, 0.25)',
-                    },
-                    {
-                      key: 'flexibleMass' as const,
-                      title: `Flexible Mass (Rank ${hud.upgrades.flexibleMass})`,
-                      desc: 'Hogere loopsnelheid, snellere Bio-Shots & lagere Mana-kosten op Slam/Dodge',
-                      accent: '#10b981',
-                      bg: 'rgba(6, 78, 59, 0.25)',
-                    },
-                    {
-                      key: 'isotopeCore' as const,
-                      title: `Isotope Core (Rank ${hud.upgrades.isotopeCore})`,
-                      desc: '+9 Bio-Shot DMG & krachtigere [E] Meltdown stralingsaura',
-                      accent: '#0ea5e9',
-                      bg: 'rgba(12, 74, 110, 0.25)',
-                    },
-                  ].map((u) => (
-                    <div
-                      key={u.key}
-                      style={{
-                        border: `1px solid ${u.accent}66`,
-                        backgroundColor: u.bg,
-                        borderRadius: 10,
-                        padding: 12,
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: 14 }}>{u.title}</strong>
-                        <button
-                          onClick={() => handleSplice(u.key)}
-                          disabled={hud.dnaPoints <= 0}
-                          style={{
-                            backgroundColor: u.accent,
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 6,
-                            padding: '5px 12px',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: hud.dnaPoints > 0 ? 'pointer' : 'not-allowed',
-                            opacity: hud.dnaPoints > 0 ? 1 : 0.35,
-                          }}
-                        >
-                          + Upgrade (1 DNA)
-                        </button>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 5 }}>{u.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Onderste Statusbalk (Geen Cooldowns, pure Mana-kosten + [K] Skills) */}
+        {/* Onderste Statusbalk (XP voedt direct DNA Skills [K], Cone-Slam & Meltdown tonen Locked tot vrijgespeeld) */}
         <footer
           style={{
             backgroundColor: '#0f172a',
@@ -1501,7 +1332,9 @@ export default function App() {
         >
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 3 }}>
-              <span style={{ color: '#c084fc' }}>LEVEL {hud.level} &bull; KARAKTER PROGRESSIE</span>
+              <span style={{ color: '#2dd4bf' }}>
+                LEVEL {hud.level} &bull; SKILL XP PROGRESSIE {hud.dnaPoints > 0 ? `(${hud.dnaPoints} DNA PUNT KLAAR IN [K]!)` : ''}
+              </span>
               <span style={{ color: '#e2e8f0' }}>
                 {hud.xp} / {hud.xpToNext} XP ({Math.round(xpPct)}%)
               </span>
@@ -1511,7 +1344,7 @@ export default function App() {
                 style={{
                   height: '100%',
                   width: `${xpPct}%`,
-                  background: 'linear-gradient(90deg, #9333ea, #c084fc)',
+                  background: 'linear-gradient(90deg, #0d9488, #2dd4bf)',
                   transition: 'width 0.2s ease',
                 }}
               />
@@ -1547,14 +1380,23 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
               {[
-                { key: '[LMB]', name: 'Bio-Shot', sub: '+8 Mana', color: '#38bdf8', active: false, onClick: undefined },
+                {
+                  key: '[LMB]',
+                  name: 'Bio-Shot',
+                  sub: `Rk ${hud.skills.bioShot} (+8 Mana)`,
+                  color: '#38bdf8',
+                  locked: false,
+                  active: false,
+                  onClick: undefined,
+                },
                 {
                   key: '[RMB]',
-                  name: 'Slam',
-                  sub: `${hud.manaCosts.slam} Mana`,
+                  name: 'Cone-Slam',
+                  sub: hud.skills.coneSlam > 0 ? `${hud.manaCosts.slam} Mana` : 'LOCKED [K]',
                   color: '#fb7185',
+                  locked: hud.skills.coneSlam <= 0,
                   active: false,
                   onClick: undefined,
                 },
@@ -1563,15 +1405,22 @@ export default function App() {
                   name: 'Dodge',
                   sub: `${hud.manaCosts.dodge} Mana`,
                   color: '#2dd4bf',
+                  locked: false,
                   active: false,
                   onClick: undefined,
                 },
                 {
                   key: '[E]',
                   name: 'Meltdown',
-                  sub: hud.meltdownActive ? 'ACTIEF!' : '80% Heat',
+                  sub:
+                    hud.skills.meltdownUlt <= 0
+                      ? 'LOCKED [K]'
+                      : hud.meltdownActive
+                      ? 'ACTIEF!'
+                      : '80% Heat',
                   color: '#fb923c',
-                  active: hud.heat >= 80 || hud.meltdownActive,
+                  locked: hud.skills.meltdownUlt <= 0,
+                  active: hud.skills.meltdownUlt > 0 && (hud.heat >= 80 || hud.meltdownActive),
                   onClick: undefined,
                 },
                 {
@@ -1579,24 +1428,18 @@ export default function App() {
                   name: 'Inventory',
                   sub: `${hud.inventory.length}/12`,
                   color: '#38bdf8',
+                  locked: false,
                   active: activeModal === 'inventory',
                   onClick: () => setActiveModal((p) => (p === 'inventory' ? 'none' : 'inventory')),
                 },
                 {
                   key: '[K]',
                   name: 'DNA Skills',
-                  sub: 'Helix',
+                  sub: hud.dnaPoints > 0 ? `+${hud.dnaPoints} DNA!` : `Lvl ${hud.level}`,
                   color: '#2dd4bf',
-                  active: activeModal === 'skills',
+                  locked: false,
+                  active: hud.dnaPoints > 0 || activeModal === 'skills',
                   onClick: () => setActiveModal((p) => (p === 'skills' ? 'none' : 'skills')),
-                },
-                {
-                  key: '[J]',
-                  name: 'Stats',
-                  sub: hud.dnaPoints > 0 ? `${hud.dnaPoints} DNA!` : `Lvl ${hud.level}`,
-                  color: '#c084fc',
-                  active: hud.dnaPoints > 0 || activeModal === 'levelup',
-                  onClick: () => setActiveModal((p) => (p === 'levelup' ? 'none' : 'levelup')),
                 },
               ].map((s) => (
                 <div
@@ -1604,16 +1447,17 @@ export default function App() {
                   onClick={s.onClick}
                   style={{
                     border: `1px solid ${s.active ? s.color : '#1e293b'}`,
-                    backgroundColor: s.active ? 'rgba(15, 118, 110, 0.28)' : '#090d16',
+                    backgroundColor: s.active ? 'rgba(15, 118, 110, 0.30)' : '#090d16',
                     borderRadius: 8,
-                    padding: '5px 3px',
+                    padding: '5px 4px',
                     textAlign: 'center',
+                    opacity: s.locked ? 0.45 : 1,
                     cursor: s.onClick ? 'pointer' : 'default',
                   }}
                 >
-                  <div style={{ fontSize: 9.5, fontFamily: 'monospace', color: s.color }}>{s.key}</div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700 }}>{s.name}</div>
-                  <div style={{ fontSize: 9.5, color: '#94a3b8' }}>{s.sub}</div>
+                  <div style={{ fontSize: 10, fontFamily: 'monospace', color: s.color }}>{s.key}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700 }}>{s.name}</div>
+                  <div style={{ fontSize: 10, color: s.locked ? '#fb7185' : '#94a3b8' }}>{s.sub}</div>
                 </div>
               ))}
             </div>
