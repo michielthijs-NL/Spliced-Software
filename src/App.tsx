@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import {
   ArenaScene,
   DUNGEONS,
+  GEM_DISPLAY_NAMES,
   type HudSnapshot,
   type SkillKey,
   type SupportGemId,
@@ -21,6 +22,8 @@ const initialHud: HudSnapshot = {
   xp: 0,
   xpToNext: 100,
   level: 1,
+  maxLevel: 20,
+  maxSocketsPerSkill: 1,
   dnaPoints: 0,
   activeDungeon: DUNGEONS[0],
   dungeonsClearedTotal: 0,
@@ -31,12 +34,14 @@ const initialHud: HudSnapshot = {
   skills: {
     unlocked: { bioShot: true, phaseDodge: true, coneSlam: false, meltdownUlt: false },
     sockets: { bioShot: [], phaseDodge: [], coneSlam: [], meltdownUlt: [] },
+    ownedGems: [],
   },
   equipped: { WEAPON: null, ARMOR: null, INJECTOR: null },
   inventory: [],
   runOutcome: 'PLAYING',
   bossRewardItem: null,
-  dungeonStats: { kills: 0, bossDefeated: false, xpEarned: 0, lootFound: 0 },
+  bossRewardGem: null,
+  dungeonStats: { kills: 0, bossDefeated: false, xpEarned: 0, lootFound: 0, gemsFound: 0 },
 };
 
 const ZONE_META: Record<
@@ -280,13 +285,18 @@ export default function App() {
 
   const hpPct = Math.max(0, Math.min(100, (hud.hp / Math.max(1, hud.maxHp)) * 100));
   const energyPct = Math.max(0, Math.min(100, (hud.energy / Math.max(1, hud.maxEnergy)) * 100));
-  const xpPct = Math.max(0, Math.min(100, (hud.xp / Math.max(1, hud.xpToNext)) * 100));
+  const xpPct = hud.level >= hud.maxLevel ? 100 : Math.max(0, Math.min(100, (hud.xp / Math.max(1, hud.xpToNext)) * 100));
 
   const selectedDungeon = DUNGEONS.find((d) => d.id === selectedDungeonId) ?? DUNGEONS[0];
   const selectedMeta = ZONE_META[selectedDungeon.id];
   const isSelectedLiberated = hud.liberatedZones.includes(selectedDungeon.id);
   const liberationPct = Math.round((hud.liberatedZones.length / DUNGEONS.length) * 100);
   const allLiberated = hud.liberatedZones.length >= DUNGEONS.length;
+
+  const socketReqLevels = [1, 10, 20];
+  const unequippedGemsCount = hud.skills.ownedGems.filter(
+    (gId) => !Object.values(hud.skills.sockets).some((list) => list.includes(gId))
+  ).length;
 
   return (
     <div
@@ -360,8 +370,15 @@ export default function App() {
                 setActiveModal((prev) => (prev === 'skills' ? 'none' : 'skills'));
               }}
               style={{
-                backgroundColor: hud.dnaPoints > 0 ? '#0f766e' : activeModal === 'skills' ? '#115e59' : '#0f172a',
-                border: `1px solid ${hud.dnaPoints > 0 || activeModal === 'skills' ? '#2dd4bf' : '#334155'}`,
+                backgroundColor:
+                  hud.dnaPoints > 0 || unequippedGemsCount > 0
+                    ? '#0f766e'
+                    : activeModal === 'skills'
+                    ? '#115e59'
+                    : '#0f172a',
+                border: `1px solid ${
+                  hud.dnaPoints > 0 || unequippedGemsCount > 0 || activeModal === 'skills' ? '#2dd4bf' : '#334155'
+                }`,
                 color: '#f8fafc',
                 borderRadius: 10,
                 padding: '8px 14px',
@@ -370,7 +387,7 @@ export default function App() {
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 6,
               }}
             >
               <span>[K] DNA SKILLS</span>
@@ -386,6 +403,20 @@ export default function App() {
                   }}
                 >
                   +{hud.dnaPoints} DNA
+                </span>
+              )}
+              {unequippedGemsCount > 0 && (
+                <span
+                  style={{
+                    backgroundColor: '#e879f9',
+                    color: '#090d16',
+                    borderRadius: 999,
+                    padding: '1px 7px',
+                    fontSize: 11,
+                    fontWeight: 800,
+                  }}
+                >
+                  +{unequippedGemsCount} GEM
                 </span>
               )}
             </button>
@@ -620,9 +651,8 @@ export default function App() {
                         DOEL VAN DE OPERATIE
                       </div>
                       <div style={{ fontSize: 13, color: '#f1f5f9', marginTop: 4 }}>
-                        Baan je een weg door de gangen, versla eindbaas{' '}
-                        <strong style={{ color: '#fbbf24' }}>{selectedDungeon.bossName}</strong> en open de Sector-deur om
-                        deze regio definitief in te nemen.
+                        Versla eindbaas <strong style={{ color: '#fbbf24' }}>{selectedDungeon.bossName}</strong>, verzamel
+                        zeldzame <strong>Support Gems</strong> van verslagen vijanden en neem deze regio in.
                       </div>
                     </div>
 
@@ -651,12 +681,11 @@ export default function App() {
                           padding: 11,
                         }}
                       >
-                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#38bdf8' }}>
-                          DREIGING &amp; BOSS LOOT
+                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#e879f9' }}>
+                          SOCKET CAPACITEIT (LVL {hud.level}/{hud.maxLevel})
                         </div>
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff', marginTop: 3 }}>
-                          {(selectedDungeon.enemyMultiplier * (1 + (hud.worldTier - 1) * 0.55)).toFixed(1)}x Kracht &bull; +
-                          {Math.round(selectedDungeon.rareBonusChance * 100)}% Rare
+                          Max {hud.maxSocketsPerSkill} / 3 Sockets &bull; {hud.skills.ownedGems.length}/8 Gems
                         </div>
                       </div>
                     </div>
@@ -729,7 +758,7 @@ export default function App() {
                             cursor: 'pointer',
                           }}
                         >
-                          DNA Skills [K] {hud.dnaPoints > 0 ? `(+${hud.dnaPoints})` : ''}
+                          DNA Skills [K] {unequippedGemsCount > 0 ? `(+${unequippedGemsCount} Gem)` : ''}
                         </button>
                       </div>
 
@@ -777,7 +806,7 @@ export default function App() {
               <div
                 style={{
                   width: '100%',
-                  maxWidth: 580,
+                  maxWidth: 600,
                   backgroundColor: '#0f172a',
                   border: '1px solid #10b98188',
                   borderRadius: 16,
@@ -792,52 +821,67 @@ export default function App() {
                 <h2 style={{ margin: '4px 0 6px', fontSize: 28, fontWeight: 900, color: '#ffffff' }}>
                   {hud.activeDungeon.name.toUpperCase()} INGENOMEN!
                 </h2>
-                <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
-                  <strong>{hud.activeDungeon.bossName}</strong> is uitgeschakeld. Permanente bonus ontgrendeld:{' '}
+                <p style={{ margin: '0 0 14px', fontSize: 13, color: '#cbd5e1' }}>
+                  <strong>{hud.activeDungeon.bossName}</strong> is uitgeschakeld. Permanente bonus:{' '}
                   <strong style={{ color: '#34d399' }}>{ZONE_META[hud.activeDungeon.id]?.captureBonus}</strong>
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
-                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>HOSTILES VERSLAGEN</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399' }}>{hud.dungeonStats.kills}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 9 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>KILLS</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34d399' }}>{hud.dungeonStats.kills}</div>
                   </div>
-                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>VERDIENDE XP</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#c084fc' }}>+{hud.dungeonStats.xpEarned} XP</div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 9 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>XP</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#c084fc' }}>+{hud.dungeonStats.xpEarned}</div>
                   </div>
-                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>LOOT VERZAMELD</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#38bdf8' }}>{hud.dungeonStats.lootFound} Items</div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 9 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>GEAR</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{hud.dungeonStats.lootFound}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 9 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>GEMS</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#e879f9' }}>{hud.dungeonStats.gemsFound}</div>
                   </div>
                 </div>
 
-                {hud.bossRewardItem && (
-                  <div
-                    style={{
-                      border: `1px solid ${rarityColors[hud.bossRewardItem.rarity].border}`,
-                      backgroundColor: rarityColors[hud.bossRewardItem.rarity].bg,
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 18,
-                    }}
-                  >
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#fbbf24', fontWeight: 700 }}>
-                      BOSS CHEST BELONING (TOEGEVOEGD AAN RUGZAK)
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {hud.bossRewardItem && (
                     <div
                       style={{
-                        fontSize: 15,
-                        fontWeight: 800,
-                        color: rarityColors[hud.bossRewardItem.rarity].text,
-                        marginTop: 2,
+                        border: `1px solid ${rarityColors[hud.bossRewardItem.rarity].border}`,
+                        backgroundColor: rarityColors[hud.bossRewardItem.rarity].bg,
+                        borderRadius: 10,
+                        padding: 10,
                       }}
                     >
-                      {hud.bossRewardItem.name} ({hud.bossRewardItem.rarity})
+                      <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#fbbf24', fontWeight: 700 }}>
+                        BOSS CHEST GEAR BELONING
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: rarityColors[hud.bossRewardItem.rarity].text }}>
+                        {hud.bossRewardItem.name} ({hud.bossRewardItem.rarity}) &mdash; {hud.bossRewardItem.description}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: '#e2e8f0' }}>{hud.bossRewardItem.description}</div>
-                  </div>
-                )}
+                  )}
+
+                  {hud.bossRewardGem && (
+                    <div
+                      style={{
+                        border: '1px solid #e879f9',
+                        backgroundColor: 'rgba(112, 26, 117, 0.35)',
+                        borderRadius: 10,
+                        padding: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#f0abfc', fontWeight: 700 }}>
+                        NIEUWE SUPPORT GEM ONTDEKT (PLAATS IN [K])
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#ffffff' }}>
+                        {GEM_DISPLAY_NAMES[hud.bossRewardGem]}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
@@ -911,8 +955,8 @@ export default function App() {
                   VERSLAGEN IN {hud.activeDungeon.name.toUpperCase()}
                 </h2>
                 <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
-                  Je behoudt je <strong>Level {hud.level}</strong>, al je <strong>DNA-skills</strong>, je{' '}
-                  <strong>ingenomen zones</strong> en je <strong>gevonden gear</strong>!
+                  Je behoudt je <strong>Level {hud.level}</strong>, al je <strong>gevonden Support Gems</strong>, je{' '}
+                  <strong>ingenomen zones</strong> en je <strong>gear</strong>!
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 18 }}>
@@ -925,8 +969,10 @@ export default function App() {
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#c084fc' }}>+{hud.dungeonStats.xpEarned} XP</div>
                   </div>
                   <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>LOOT BEHOUDEN</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{hud.dungeonStats.lootFound} Items</div>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>GEMS &amp; LOOT</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#e879f9' }}>
+                      {hud.dungeonStats.gemsFound} Gem &bull; {hud.dungeonStats.lootFound} Gear
+                    </div>
                   </div>
                 </div>
 
@@ -968,7 +1014,7 @@ export default function App() {
             </div>
           )}
 
-          {/* [K] POE2-STIJL DNA SKILL HELIX & SKILL SUBMENU */}
+          {/* [K] POE2-STIJL DNA SKILL HELIX & LEVEL-RESTRICTED SOCKET SUBMENU */}
           {activeModal === 'skills' && (
             <div
               style={{
@@ -1008,12 +1054,15 @@ export default function App() {
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 900, color: '#2dd4bf' }}>
                       {selectedSkillKey
-                        ? `SKILL SOCKETS // ${HELIX_SKILLS.find((s) => s.key === selectedSkillKey)?.baseName.toUpperCase()} (MAX 3 UPGRADES)`
-                        : `GENETIC SKILL HELIX • LEVEL ${hud.level}`}
+                        ? `SKILL SOCKETS // ${HELIX_SKILLS.find((s) => s.key === selectedSkillKey)?.baseName.toUpperCase()} (${
+                            hud.maxSocketsPerSkill
+                          }/3 SLOTS BESCHIKBAAR OP LVL ${hud.level})`
+                        : `GENETIC SKILL HELIX • LEVEL ${hud.level} / ${hud.maxLevel}`}
                     </div>
                     <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 2 }}>
-                      Beschikbare DNA Punten: <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull; Elke skill
-                      heeft max. 3 sockets en elke Support-Mutatie is uniek over alle skills
+                      DNA Punten (skills ontgrendelen): <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull;
+                      Sockets per skill: <strong>Lvl 1: 1</strong> | <strong>Lvl 10: 2</strong> |{' '}
+                      <strong>Lvl 20: 3</strong> &bull; Gems gevonden: <strong>{hud.skills.ownedGems.length}/8</strong>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -1056,7 +1105,7 @@ export default function App() {
                 </div>
 
                 {!selectedSkillKey ? (
-                  /* HOOFDSCHERM: DE 4 SKILLS OP DE DNA-HELIX */
+                  /* HOOFDSCHERM: DE 4 SKILLS OP DE DNA-HELIX MET LEVEL-LOCKED SOCKETS */
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 14, alignItems: 'center' }}>
                     {(['LEFT', 'RIGHT'] as const).map((side, colIdx) => (
                       <div
@@ -1090,27 +1139,36 @@ export default function App() {
                                     color: unlocked ? '#060a12' : '#fb7185',
                                   }}
                                 >
-                                  {unlocked ? `${sockets.length} / 3 SOCKETS` : 'LOCKED'}
+                                  {unlocked ? `${sockets.length} / ${hud.maxSocketsPerSkill} SOCKETS` : 'LOCKED'}
                                 </span>
                               </div>
                               <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 5 }}>{sk.baseDesc}</div>
 
-                              {/* 3 Socket-indicatoren op de kaart */}
+                              {/* 3 Socket-indicatoren met Level 1 / Level 10 / Level 20 restrictie */}
                               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                                 {[0, 1, 2].map((idx) => {
+                                  const reqLvl = socketReqLevels[idx];
+                                  const slotUnlockedByLevel = hud.level >= reqLvl;
                                   const gemId = sockets[idx];
                                   const gem = SUPPORT_GEMS.find((g) => g.id === gemId);
+
                                   return (
                                     <div
                                       key={idx}
                                       style={{
                                         flex: 1,
-                                        fontSize: 10,
-                                        padding: '4px 5px',
+                                        fontSize: 9.5,
+                                        padding: '4px 4px',
                                         borderRadius: 6,
-                                        border: `1px dashed ${gem ? gem.color : '#334155'}`,
-                                        backgroundColor: gem ? 'rgba(30, 41, 59, 0.85)' : '#060a12',
-                                        color: gem ? gem.color : '#475569',
+                                        border: `1px dashed ${
+                                          !slotUnlockedByLevel ? '#1e293b' : gem ? gem.color : '#334155'
+                                        }`,
+                                        backgroundColor: !slotUnlockedByLevel
+                                          ? '#05070c'
+                                          : gem
+                                          ? 'rgba(30, 41, 59, 0.85)'
+                                          : '#060a12',
+                                        color: !slotUnlockedByLevel ? '#475569' : gem ? gem.color : '#94a3b8',
                                         textAlign: 'center',
                                         fontWeight: 700,
                                         overflow: 'hidden',
@@ -1118,7 +1176,7 @@ export default function App() {
                                         whiteSpace: 'nowrap',
                                       }}
                                     >
-                                      {gem ? gem.name : 'Leeg'}
+                                      {!slotUnlockedByLevel ? `Lvl ${reqLvl}` : gem ? gem.name : 'Leeg'}
                                     </div>
                                   );
                                 })}
@@ -1140,7 +1198,7 @@ export default function App() {
                                     cursor: 'pointer',
                                   }}
                                 >
-                                  Open Skill Submenu ({sockets.length}/3) &rarr;
+                                  Open Skill Submenu ({sockets.length}/{hud.maxSocketsPerSkill}) &rarr;
                                 </button>
                               ) : (
                                 <button
@@ -1232,29 +1290,42 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  /* SUBMENU VAN DE GEKOZEN SKILL: 3 SOCKETS + UNIEKE MUTATIE-POOL */
+                  /* SUBMENU VAN DE GEKOZEN SKILL: 3 LEVEL-GATED SOCKETS + GEVONDEN SUPPORT GEMS */
                   (() => {
                     const currentSockets = hud.skills.sockets[selectedSkillKey];
-                    const availableGems = SUPPORT_GEMS.filter((g) => g.compatible.includes(selectedSkillKey));
+                    const compatibleGems = SUPPORT_GEMS.filter((g) => g.compatible.includes(selectedSkillKey));
                     return (
                       <div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
                           {[0, 1, 2].map((idx) => {
+                            const reqLvl = socketReqLevels[idx];
+                            const slotUnlocked = hud.level >= reqLvl;
                             const gem = SUPPORT_GEMS.find((g) => g.id === currentSockets[idx]);
+
                             return (
                               <div
                                 key={idx}
                                 style={{
-                                  border: `2px ${gem ? 'solid' : 'dashed'} ${gem ? gem.color : '#334155'}`,
-                                  backgroundColor: '#090d16',
+                                  border: `2px ${!slotUnlocked ? 'dotted' : gem ? 'solid' : 'dashed'} ${
+                                    !slotUnlocked ? '#1e293b' : gem ? gem.color : '#334155'
+                                  }`,
+                                  backgroundColor: !slotUnlocked ? '#060911' : '#090d16',
                                   borderRadius: 10,
                                   padding: 10,
+                                  opacity: slotUnlocked ? 1 : 0.6,
                                 }}
                               >
-                                <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>
-                                  SOCKET SLOT #{idx + 1}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontFamily: 'monospace' }}>
+                                  <span style={{ color: '#94a3b8' }}>SOCKET #{idx + 1}</span>
+                                  <span style={{ color: slotUnlocked ? '#34d399' : '#fb7185', fontWeight: 700 }}>
+                                    {slotUnlocked ? `UNLOCKED (LVL ${reqLvl})` : `LOCKED (LVL ${reqLvl})`}
+                                  </span>
                                 </div>
-                                {gem ? (
+                                {!slotUnlocked ? (
+                                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
+                                    Bereik Level {reqLvl} om dit socket-slot te openen.
+                                  </div>
+                                ) : gem ? (
                                   <>
                                     <div style={{ fontSize: 13, fontWeight: 800, color: gem.color, marginTop: 2 }}>
                                       {gem.name}
@@ -1263,7 +1334,7 @@ export default function App() {
                                   </>
                                 ) : (
                                   <div style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginTop: 6 }}>
-                                    Lege DNA-socket
+                                    Lege socket &mdash; plaats hieronder een gevonden Support Gem
                                   </div>
                                 )}
                               </div>
@@ -1272,26 +1343,27 @@ export default function App() {
                         </div>
 
                         <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8', marginBottom: 8 }}>
-                          BESCHIKBARE SUPPORT-MUTATIES (ELKE MUTATIE IS UNIEK OVER ALLE SKILLS)
+                          COMPATIBELE SUPPORT GEMS (VIND ZE ALS ZELDZAME DROPS OP DE GROND &bull; UNIEK PER SKILL)
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxHeight: 250, overflowY: 'auto' }}>
-                          {availableGems.map((gem) => {
+                          {compatibleGems.map((gem) => {
+                            const isOwned = hud.skills.ownedGems.includes(gem.id);
                             const usedBySkillKey = (Object.keys(hud.skills.sockets) as SkillKey[]).find((k) =>
                               hud.skills.sockets[k].includes(gem.id)
                             );
                             const usedBySkill = HELIX_SKILLS.find((s) => s.key === usedBySkillKey);
-                            const isFull = currentSockets.length >= 3;
-                            const disabled = Boolean(usedBySkill) || isFull || hud.dnaPoints <= 0;
+                            const isAtLevelLimit = currentSockets.length >= hud.maxSocketsPerSkill;
+                            const disabled = !isOwned || Boolean(usedBySkill) || isAtLevelLimit;
 
                             return (
                               <div
                                 key={gem.id}
                                 style={{
-                                  border: `1px solid ${usedBySkill ? '#334155' : gem.color + '66'}`,
-                                  backgroundColor: usedBySkill ? '#060a12' : '#090d16',
+                                  border: `1px solid ${!isOwned || usedBySkill ? '#1e293b' : gem.color + '66'}`,
+                                  backgroundColor: !isOwned || usedBySkill ? '#060a12' : '#090d16',
                                   borderRadius: 9,
                                   padding: 10,
-                                  opacity: usedBySkill ? 0.52 : 1,
+                                  opacity: !isOwned || usedBySkill ? 0.5 : 1,
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
@@ -1299,16 +1371,20 @@ export default function App() {
                                 }}
                               >
                                 <div>
-                                  <div style={{ fontSize: 10, fontFamily: 'monospace', color: gem.color }}>{gem.tag}</div>
-                                  <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff' }}>{gem.name}</div>
+                                  <div style={{ fontSize: 10, fontFamily: 'monospace', color: isOwned ? gem.color : '#64748b' }}>
+                                    {gem.tag} {!isOwned ? '• NOG NIET GEVONDEN' : ''}
+                                  </div>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: isOwned ? '#ffffff' : '#94a3b8' }}>
+                                    {gem.name}
+                                  </div>
                                   <div style={{ fontSize: 11, color: '#cbd5e1' }}>{gem.desc}</div>
                                 </div>
                                 <button
                                   onClick={() => handleSocketSupport(selectedSkillKey, gem.id)}
                                   disabled={disabled}
                                   style={{
-                                    backgroundColor: usedBySkill ? '#1e293b' : gem.color,
-                                    color: usedBySkill ? '#94a3b8' : '#060a12',
+                                    backgroundColor: !isOwned || usedBySkill ? '#1e293b' : gem.color,
+                                    color: !isOwned || usedBySkill ? '#94a3b8' : '#060a12',
                                     border: 'none',
                                     borderRadius: 6,
                                     padding: '6px 10px',
@@ -1318,11 +1394,13 @@ export default function App() {
                                     flexShrink: 0,
                                   }}
                                 >
-                                  {usedBySkill
-                                    ? `In gebruik bij ${usedBySkill.baseName}`
-                                    : isFull
-                                    ? 'Vol (3/3)'
-                                    : 'Socket (1 DNA)'}
+                                  {!isOwned
+                                    ? 'Niet Gevonden'
+                                    : usedBySkill
+                                    ? `Bij ${usedBySkill.baseName}`
+                                    : isAtLevelLimit
+                                    ? `Max (${hud.maxSocketsPerSkill}/${hud.maxSocketsPerSkill})`
+                                    : 'Plaats Gem'}
                                 </button>
                               </div>
                             );
@@ -1540,11 +1618,11 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 3 }}>
               <span style={{ color: '#2dd4bf' }}>
-                LEVEL {hud.level} &bull; SKILL XP PROGRESSIE{' '}
-                {hud.dnaPoints > 0 ? `(${hud.dnaPoints} DNA PUNT KLAAR IN [K]!)` : ''}
+                LEVEL {hud.level} / {hud.maxLevel} (MAX {hud.maxSocketsPerSkill}/3 SOCKETS){' '}
+                {hud.dnaPoints > 0 ? `• ${hud.dnaPoints} DNA PUNT KLAAR IN [K]!` : ''}
               </span>
               <span style={{ color: '#e2e8f0' }}>
-                {hud.xp} / {hud.xpToNext} XP ({Math.round(xpPct)}%)
+                {hud.level >= hud.maxLevel ? 'MAX LEVEL 20' : `${hud.xp} / ${hud.xpToNext} XP (${Math.round(xpPct)}%)`}
               </span>
             </div>
             <div style={{ height: 9, backgroundColor: '#1e293b', borderRadius: 999, overflow: 'hidden' }}>
@@ -1597,7 +1675,7 @@ export default function App() {
                 {
                   key: '[LMB]',
                   name: 'Bio-Shot',
-                  sub: `${hud.skills.sockets.bioShot.length}/3 Gems`,
+                  sub: `${hud.skills.sockets.bioShot.length}/${hud.maxSocketsPerSkill} Gems`,
                   color: '#38bdf8',
                   locked: false,
                   active: false,
@@ -1661,10 +1739,15 @@ export default function App() {
                 {
                   key: '[K]',
                   name: 'DNA Skills',
-                  sub: hud.dnaPoints > 0 ? `+${hud.dnaPoints} DNA!` : `Lvl ${hud.level}`,
+                  sub:
+                    unequippedGemsCount > 0
+                      ? `+${unequippedGemsCount} Gem!`
+                      : hud.dnaPoints > 0
+                      ? `+${hud.dnaPoints} DNA!`
+                      : `Lvl ${hud.level}/${hud.maxLevel}`,
                   color: '#2dd4bf',
                   locked: false,
-                  active: hud.dnaPoints > 0 || activeModal === 'skills',
+                  active: hud.dnaPoints > 0 || unequippedGemsCount > 0 || activeModal === 'skills',
                   onClick: () => {
                     setSelectedSkillKey(null);
                     setActiveModal((p) => (p === 'skills' ? 'none' : 'skills'));
