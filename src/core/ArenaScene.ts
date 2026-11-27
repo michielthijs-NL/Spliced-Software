@@ -137,6 +137,8 @@ export interface HudSnapshot {
   dnaPoints: number;
   activeDungeon: DungeonDef;
   dungeonsClearedTotal: number;
+  liberatedZones: string[];
+  worldTier: number;
   enemiesRemaining: number;
   cooldowns: { slam: number; dash: number };
   upgrades: SomaticUpgrades;
@@ -216,7 +218,15 @@ export class ArenaScene extends Phaser.Scene {
   private level = 1;
   private dnaPoints = 0;
   private dungeonsClearedTotal = 0;
+  private liberatedZones: string[] = [];
+  private worldTier = 1;
   private activeDungeon: DungeonDef = DUNGEONS[0];
+
+  public resetWorldCampaign(): void {
+    this.liberatedZones = [];
+    this.worldTier += 1;
+    this.pushHud(true);
+  }
 
   private upgrades: SomaticUpgrades = {
     bruteForce: 0,
@@ -333,8 +343,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getMaxHp(): number {
+    const cryoBonus = this.liberatedZones.includes('cryo') ? 25 : 0;
+    const crimsonBonus = this.liberatedZones.includes('crimson') ? 45 : 0;
     return (
       this.baseMaxHp +
+      cryoBonus +
+      crimsonBonus +
       this.upgrades.bruteForce * 35 +
       (this.equipped.ARMOR?.stats.maxHpBonus ?? 0) +
       (this.equipped.INJECTOR?.stats.maxHpBonus ?? 0)
@@ -351,8 +365,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getShotDamage(): number {
+    const foundryBonus = this.liberatedZones.includes('foundry') ? 5 : 0;
+    const voidBonus = this.liberatedZones.includes('void') ? 8 : 0;
     return (
       14 +
+      foundryBonus +
+      voidBonus +
       this.upgrades.isotopeCore * 9 +
       (this.equipped.WEAPON?.stats.damageBonus ?? 0) +
       (this.equipped.INJECTOR?.stats.damageBonus ?? 0)
@@ -566,7 +584,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createEnemy(x: number, y: number, isBoss: boolean, isElite: boolean): void {
-    const mult = this.activeDungeon.enemyMultiplier;
+    const mult = this.activeDungeon.enemyMultiplier * (1 + (this.worldTier - 1) * 0.55);
     const maxHp = Math.round((isBoss ? 520 : isElite ? 125 : 52) * mult);
     const speed = isBoss ? 128 : isElite ? 145 : 130;
     const damage = Math.round((isBoss ? 25 : isElite ? 15 : 10) * (1 + (mult - 1) * 0.65));
@@ -1007,6 +1025,9 @@ export class ArenaScene extends Phaser.Scene {
     if (this.exitDoorZone.contains(this.player.x, this.player.y)) {
       this.runOutcome = 'VICTORY';
       this.dungeonsClearedTotal += 1;
+      if (!this.liberatedZones.includes(this.activeDungeon.id)) {
+        this.liberatedZones.push(this.activeDungeon.id);
+      }
       this.playerBody.setVelocity(0, 0);
       for (const e of this.enemies) {
         e.body.setVelocity(0, 0);
@@ -1092,6 +1113,8 @@ export class ArenaScene extends Phaser.Scene {
       dnaPoints: this.dnaPoints,
       activeDungeon: this.activeDungeon,
       dungeonsClearedTotal: this.dungeonsClearedTotal,
+      liberatedZones: [...this.liberatedZones],
+      worldTier: this.worldTier,
       enemiesRemaining: this.enemies.length,
       cooldowns: { slam: slamCd, dash: dodgeCd },
       upgrades: { ...this.upgrades },

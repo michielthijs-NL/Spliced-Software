@@ -23,6 +23,8 @@ const initialHud: HudSnapshot = {
   dnaPoints: 0,
   activeDungeon: DUNGEONS[0],
   dungeonsClearedTotal: 0,
+  liberatedZones: [],
+  worldTier: 1,
   enemiesRemaining: 19,
   cooldowns: { slam: 0, dash: 0 },
   upgrades: { bruteForce: 0, flexibleMass: 0, isotopeCore: 0 },
@@ -31,6 +33,47 @@ const initialHud: HudSnapshot = {
   runOutcome: 'PLAYING',
   bossRewardItem: null,
   dungeonStats: { kills: 0, bossDefeated: false, xpEarned: 0, lootFound: 0 },
+};
+
+const ZONE_META: Record<
+  string,
+  { cx: number; cy: number; sectorCode: string; biome: string; captureBonus: string }
+> = {
+  cryo: {
+    cx: 132,
+    cy: 112,
+    sectorCode: 'SEC-01 // ARCTIC POLE',
+    biome: 'Bevroren Koeltorens',
+    captureBonus: '+25 Permanente Max HP',
+  },
+  bio: {
+    cx: 245,
+    cy: 138,
+    sectorCode: 'SEC-02 // EQUATORIAL JUNGLE',
+    biome: 'Overwoekerd Mutatie-Lab',
+    captureBonus: '+15% Snellere XP & Bio-Flow',
+  },
+  foundry: {
+    cx: 118,
+    cy: 215,
+    sectorCode: 'SEC-03 // TECTONIC RIFT',
+    biome: 'Ondergrondse Smelterij',
+    captureBonus: '+5 Permanente Bio-Shot DMG',
+  },
+  crimson: {
+    cx: 256,
+    cy: 238,
+    sectorCode: 'SEC-04 // ASH WASTES',
+    biome: 'Hoogbeveiligd Isolatie-Fort',
+    captureBonus: '+45 Permanente Max HP',
+  },
+  void: {
+    cx: 188,
+    cy: 288,
+    sectorCode: 'SEC-05 // SOUTHERN CORE',
+    biome: 'Dimensionale Rift-Kamer',
+    captureBonus: '+8 Permanente Bio-Shot DMG',
+  },
 };
 
 const rarityColors: Record<ItemRarity, { border: string; bg: string; text: string }> = {
@@ -50,12 +93,11 @@ export default function App() {
   const sceneRef = useRef<ArenaScene | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(initialHud);
   const [activeModal, setActiveModal] = useState<'none' | 'inventory' | 'levelup'>('none');
-  const [showDungeonSelect, setShowDungeonSelect] = useState<boolean>(true);
+  const [showWorldMap, setShowWorldMap] = useState<boolean>(true);
   const [selectedDungeonId, setSelectedDungeonId] = useState<string>(DUNGEONS[0].id);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (showDungeonSelect) return;
       const k = e.key.toLowerCase();
       if (k === 'i') {
         e.preventDefault();
@@ -69,7 +111,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showDungeonSelect]);
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -102,7 +144,7 @@ export default function App() {
   const handleEnterDungeon = (dungeonId: string) => {
     setSelectedDungeonId(dungeonId);
     setActiveModal('none');
-    setShowDungeonSelect(false);
+    setShowWorldMap(false);
     sceneRef.current?.startDungeon(dungeonId);
   };
 
@@ -113,6 +155,12 @@ export default function App() {
   const hpPct = Math.max(0, Math.min(100, (hud.hp / Math.max(1, hud.maxHp)) * 100));
   const energyPct = Math.max(0, Math.min(100, (hud.energy / Math.max(1, hud.maxEnergy)) * 100));
   const xpPct = Math.max(0, Math.min(100, (hud.xp / Math.max(1, hud.xpToNext)) * 100));
+
+  const selectedDungeon = DUNGEONS.find((d) => d.id === selectedDungeonId) ?? DUNGEONS[0];
+  const selectedMeta = ZONE_META[selectedDungeon.id];
+  const isSelectedLiberated = hud.liberatedZones.includes(selectedDungeon.id);
+  const liberationPct = Math.round((hud.liberatedZones.length / DUNGEONS.length) * 100);
+  const allLiberated = hud.liberatedZones.length >= DUNGEONS.length;
 
   return (
     <div
@@ -131,7 +179,7 @@ export default function App() {
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: hud.activeDungeon.accent }}>
-              DUNGEON: {hud.activeDungeon.name.toUpperCase()} &bull; BOSS: {hud.activeDungeon.bossName.toUpperCase()} ({hud.enemiesRemaining} HOSTILES)
+              WORLD TIER {hud.worldTier} &bull; PLANET LIBERATION: {liberationPct}% ({hud.liberatedZones.length}/{DUNGEONS.length} ZONES)
             </div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#ffffff' }}>Spliced: Meltdown</h1>
           </div>
@@ -140,11 +188,11 @@ export default function App() {
             <button
               onClick={() => {
                 setActiveModal('none');
-                setShowDungeonSelect(true);
+                setShowWorldMap(true);
               }}
               style={{
-                backgroundColor: '#0f172a',
-                border: '1px solid #475569',
+                backgroundColor: showWorldMap ? '#0284c7' : '#0f172a',
+                border: `1px solid ${showWorldMap ? '#38bdf8' : '#475569'}`,
                 color: '#f8fafc',
                 borderRadius: 10,
                 padding: '8px 14px',
@@ -153,7 +201,7 @@ export default function App() {
                 cursor: 'pointer',
               }}
             >
-              DUNGEONS ({hud.dungeonsClearedTotal} CLEARED)
+              WERELDBOL ({hud.liberatedZones.length}/{DUNGEONS.length})
             </button>
 
             <button
@@ -211,7 +259,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Hoofd Game Viewport + Overlays */}
+        {/* Hoofd Game Viewport + Wereldbol + Modals */}
         <div style={{ position: 'relative', width: '100%' }}>
           <div
             ref={containerRef}
@@ -226,14 +274,13 @@ export default function App() {
             }}
           />
 
-          {/* DUNGEON SELECT LOBBY (VOOR START & TUSSEN RUNS) */}
-          {showDungeonSelect && (
+          {/* INTERACTIEVE WERELDBOL (PLANETARY CONQUEST START SCREEN) */}
+          {showWorldMap && (
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(6, 10, 18, 0.94)',
-                backdropFilter: 'blur(8px)',
+                background: 'radial-gradient(circle at 32% 50%, #0d1b2e 0%, #050811 85%)',
                 borderRadius: 12,
                 padding: 22,
                 display: 'flex',
@@ -245,155 +292,360 @@ export default function App() {
               <div
                 style={{
                   width: '100%',
-                  maxWidth: 980,
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #334155',
-                  borderRadius: 16,
-                  padding: 20,
-                  boxShadow: '0 25px 70px rgba(0,0,0,0.85)',
+                  maxWidth: 1040,
+                  display: 'grid',
+                  gridTemplateColumns: '430px 1fr',
+                  gap: 22,
+                  alignItems: 'center',
                 }}
               >
+                {/* Linkerkolom: Interactieve Wereldbol SVG */}
                 <div
                   style={{
+                    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+                    border: '1px solid #1e293b',
+                    borderRadius: 18,
+                    padding: 16,
+                    textAlign: 'center',
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.75)',
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: 2, color: '#38bdf8', marginBottom: 6 }}>
+                    SECTOR KEPLER-9 // KLIK EEN ZONE OP DE WERELDBOL
+                  </div>
+
+                  <svg viewBox="0 0 380 380" style={{ width: '100%', maxWidth: 360, height: 'auto', display: 'block', margin: '0 auto' }}>
+                    <defs>
+                      <radialGradient id="planetGlow" cx="38%" cy="32%" r="68%">
+                        <stop offset="0%" stopColor="#1e3a5f" />
+                        <stop offset="55%" stopColor="#0f172a" />
+                        <stop offset="100%" stopColor="#04070d" />
+                      </radialGradient>
+                      <radialGradient id="atmosphere" cx="50%" cy="50%" r="50%">
+                        <stop offset="82%" stopColor="rgba(56, 189, 248, 0)" />
+                        <stop offset="96%" stopColor="rgba(56, 189, 248, 0.22)" />
+                        <stop offset="100%" stopColor="rgba(56, 189, 248, 0)" />
+                      </radialGradient>
+                      <clipPath id="globeClip">
+                        <circle cx="190" cy="190" r="154" />
+                      </clipPath>
+                    </defs>
+
+                    {/* Atmosfeer gloed */}
+                    <circle cx="190" cy="190" r="174" fill="url(#atmosphere)" />
+                    {/* Planeet bol */}
+                    <circle cx="190" cy="190" r="154" fill="url(#planetGlow)" stroke="#38bdf855" strokeWidth="2" />
+
+                    {/* Continent-silhouetten & Breedte-/Lengtegraden */}
+                    <g clipPath="url(#globeClip)">
+                      <path
+                        d="M70,95 Q130,75 175,105 T255,120 Q290,145 270,185 T195,195 Q140,210 100,175 Z"
+                        fill="#1e293b"
+                        opacity="0.75"
+                      />
+                      <path
+                        d="M85,215 Q145,195 190,225 T295,235 Q315,275 265,305 T150,310 Q105,285 85,215 Z"
+                        fill="#1e293b"
+                        opacity="0.75"
+                      />
+
+                      {/* Rasterlijnen */}
+                      <ellipse cx="190" cy="190" rx="154" ry="52" fill="none" stroke="#38bdf822" strokeWidth="1" />
+                      <ellipse cx="190" cy="190" rx="154" ry="108" fill="none" stroke="#38bdf822" strokeWidth="1" />
+                      <ellipse cx="190" cy="190" rx="58" ry="154" fill="none" stroke="#38bdf822" strokeWidth="1" />
+                      <ellipse cx="190" cy="190" rx="115" ry="154" fill="none" stroke="#38bdf822" strokeWidth="1" />
+
+                      {/* Verbindingsroutes tussen de 5 Dungeon Zones */}
+                      <polyline
+                        points="132,112 245,138 118,215 256,238 188,288"
+                        fill="none"
+                        stroke="#475569"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
+                      />
+                    </g>
+
+                    {/* 5 Klikbare Dungeon-Markers op de Wereldbol */}
+                    {DUNGEONS.map((d, index) => {
+                      const pos = ZONE_META[d.id];
+                      const liberated = hud.liberatedZones.includes(d.id);
+                      const isSelected = selectedDungeonId === d.id;
+                      const pinColor = liberated ? '#10b981' : d.accent;
+
+                      return (
+                        <g
+                          key={d.id}
+                          onClick={() => setSelectedDungeonId(d.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {/* Selectiering */}
+                          {isSelected && (
+                            <circle
+                              cx={pos.cx}
+                              cy={pos.cy}
+                              r="22"
+                              fill="none"
+                              stroke="#ffffff"
+                              strokeWidth="2"
+                              strokeDasharray="5 3"
+                            />
+                          )}
+                          {/* Buitenste gloed */}
+                          <circle cx={pos.cx} cy={pos.cy} r="15" fill={pinColor} opacity="0.28" />
+                          {/* Kern-marker */}
+                          <circle
+                            cx={pos.cx}
+                            cy={pos.cy}
+                            r="9"
+                            fill={liberated ? '#10b981' : '#090d16'}
+                            stroke={pinColor}
+                            strokeWidth="3"
+                          />
+                          {/* Label op de kaart */}
+                          <rect
+                            x={pos.cx - 46}
+                            y={pos.cy + 14}
+                            width="92"
+                            height="18"
+                            rx="4"
+                            fill="#060a12dd"
+                            stroke={isSelected ? '#ffffff' : '#334155'}
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={pos.cx}
+                            y={pos.cy + 26}
+                            textAnchor="middle"
+                            fill={liberated ? '#6ee7b7' : '#f8fafc'}
+                            fontSize="9.5"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {liberated ? `\u2713 ${d.name.split(' ')[0]}` : `0${index + 1}. ${d.name.split(' ')[0]}`}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+
+                  {/* Totale Planetaire Bevrijdingsbalk */}
+                  <div style={{ marginTop: 8, textAlign: 'left' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+                      <span style={{ color: allLiberated ? '#34d399' : '#38bdf8' }}>
+                        {allLiberated ? 'PLANEET 100% BEVRIJD!' : 'PLANETAIRE OVERNAME'}
+                      </span>
+                      <span>
+                        {hud.liberatedZones.length} / {DUNGEONS.length} Zones ({liberationPct}%)
+                      </span>
+                    </div>
+                    <div style={{ height: 8, backgroundColor: '#1e293b', borderRadius: 999, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${liberationPct}%`,
+                          background: 'linear-gradient(90deg, #0284c7, #10b981)',
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rechterkolom: Geselecteerde Zone Briefing & Missie-doel */}
+                <div
+                  style={{
+                    backgroundColor: '#0f172a',
+                    border: `1px solid ${isSelectedLiberated ? '#10b98188' : selectedDungeon.accent + '66'}`,
+                    borderRadius: 18,
+                    padding: 22,
                     display: 'flex',
+                    flexDirection: 'column',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderBottom: '1px solid #1e293b',
-                    paddingBottom: 12,
-                    marginBottom: 16,
+                    minHeight: 430,
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.75)',
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: '#38bdf8' }}>
-                      DUNGEON FINDER &bull; PERSISTENT CHARACTER PROGRESSION
-                    </div>
-                    <h2 style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 800 }}>Kies een Dungeon om binnen te vallen</h2>
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: 12 }}>
-                    <div style={{ fontWeight: 800, color: '#c084fc' }}>
-                      Karakter Rank Level {hud.level} ({hud.dungeonsClearedTotal} Dungeons voltooid)
-                    </div>
-                    <div style={{ color: '#94a3b8' }}>
-                      Max HP: {hud.maxHp} &bull; DNA Punten: {hud.dnaPoints} &bull; Rugzak: {hud.inventory.length}/12
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 18 }}>
-                  {DUNGEONS.map((d) => {
-                    const isSelected = selectedDungeonId === d.id;
-                    const underLeveled = hud.level < d.recommendedLevel;
-                    return (
-                      <div
-                        key={d.id}
-                        onClick={() => setSelectedDungeonId(d.id)}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: selectedDungeon.accent, fontWeight: 700 }}>
+                        {selectedMeta.sectorCode} &bull; {selectedDungeon.difficultyLabel}
+                      </span>
+                      <span
                         style={{
-                          border: `2px solid ${isSelected ? d.accent : '#1e293b'}`,
-                          backgroundColor: isSelected ? 'rgba(30, 41, 59, 0.85)' : '#090d16',
-                          borderRadius: 12,
-                          padding: 12,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          minHeight: 215,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          backgroundColor: isSelectedLiberated ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)',
+                          color: isSelectedLiberated ? '#34d399' : '#fb7185',
+                          border: `1px solid ${isSelectedLiberated ? '#10b981' : '#f43f5e'}`,
                         }}
                       >
-                        <div>
-                          <div style={{ fontSize: 10, fontFamily: 'monospace', color: d.accent, fontWeight: 700 }}>
-                            {d.difficultyLabel}
-                          </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 4 }}>{d.name}</div>
-                          <div
-                            style={{
-                              marginTop: 8,
-                              padding: '5px 7px',
-                              borderRadius: 6,
-                              backgroundColor: '#0f172a',
-                              border: '1px solid #1e293b',
-                              fontSize: 11,
-                            }}
-                          >
-                            <div style={{ color: '#94a3b8', fontSize: 10 }}>EINDBAAS</div>
-                            <div style={{ color: '#fbbf24', fontWeight: 700 }}>{d.bossName}</div>
-                          </div>
-                        </div>
+                        {isSelectedLiberated ? 'ZONE INGENOMEN' : 'VIJANDELIJKE ZONE'}
+                      </span>
+                    </div>
 
-                        <div style={{ marginTop: 12, fontSize: 11, color: '#cbd5e1' }}>
-                          <div>Enemy Power: <strong>{d.enemyMultiplier}x</strong></div>
-                          <div>Loot Bonus: <strong>+{Math.round(d.rareBonusChance * 100)}% Rare</strong></div>
-                          {underLeveled && (
-                            <div style={{ color: '#fb7185', fontSize: 10, marginTop: 4 }}>
-                              Aanbevolen: Level {d.recommendedLevel}+
-                            </div>
-                          )}
+                    <h2 style={{ margin: '8px 0 4px', fontSize: 28, fontWeight: 900, color: '#ffffff' }}>
+                      {selectedDungeon.name}
+                    </h2>
+                    <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
+                      Omgeving: <strong style={{ color: '#e2e8f0' }}>{selectedMeta.biome}</strong> &bull; World Tier{' '}
+                      <strong>{hud.worldTier}</strong>
+                    </div>
+
+                    {/* Missie-doel & Eindbaas */}
+                    <div
+                      style={{
+                        backgroundColor: '#090d16',
+                        border: '1px solid #1e293b',
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#fbbf24', fontWeight: 700 }}>
+                        DOEL VAN DE OPERATIE
+                      </div>
+                      <div style={{ fontSize: 13, color: '#f1f5f9', marginTop: 4 }}>
+                        Baan je een weg door de gangen, versla eindbaas{' '}
+                        <strong style={{ color: '#fbbf24' }}>{selectedDungeon.bossName}</strong> en open de Sector-deur om
+                        deze regio definitief in te nemen.
+                      </div>
+                    </div>
+
+                    {/* Zone Inname-beloning & Stats */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                      <div
+                        style={{
+                          backgroundColor: '#090d16',
+                          border: `1px solid ${isSelectedLiberated ? '#10b98155' : '#1e293b'}`,
+                          borderRadius: 10,
+                          padding: 11,
+                        }}
+                      >
+                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#34d399' }}>
+                          {isSelectedLiberated ? 'ACTIEVE ZONE-BONUS' : 'BELONING BIJ INNAME'}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff', marginTop: 3 }}>
+                          {selectedMeta.captureBonus}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => {
-                        setActiveModal('inventory');
-                      }}
-                      style={{
-                        backgroundColor: '#1e293b',
-                        color: '#e2e8f0',
-                        border: '1px solid #334155',
-                        borderRadius: 8,
-                        padding: '10px 14px',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Bekijk Gear &amp; Rugzak [I]
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveModal('levelup');
-                      }}
-                      style={{
-                        backgroundColor: '#1e293b',
-                        color: '#e2e8f0',
-                        border: '1px solid #334155',
-                        borderRadius: 8,
-                        padding: '10px 14px',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      DNA Mutaties [J] {hud.dnaPoints > 0 ? `(+${hud.dnaPoints})` : ''}
-                    </button>
+                      <div
+                        style={{
+                          backgroundColor: '#090d16',
+                          border: '1px solid #1e293b',
+                          borderRadius: 10,
+                          padding: 11,
+                        }}
+                      >
+                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#38bdf8' }}>
+                          DREIGING &amp; BOSS LOOT
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff', marginTop: 3 }}>
+                          {(selectedDungeon.enemyMultiplier * (1 + (hud.worldTier - 1) * 0.55)).toFixed(1)}x Kracht &bull; +
+                          {Math.round(selectedDungeon.rareBonusChance * 100)}% Rare
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <button
-                    onClick={() => handleEnterDungeon(selectedDungeonId)}
-                    style={{
-                      background: 'linear-gradient(90deg, #0284c7, #10b981)',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: 10,
-                      padding: '12px 24px',
-                      fontSize: 14,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
-                    }}
-                  >
-                    ENTER DUNGEON: {(DUNGEONS.find((d) => d.id === selectedDungeonId) ?? DUNGEONS[0]).name.toUpperCase()} &rarr;
-                  </button>
+                  {/* Actieknoppen onderaan */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {allLiberated && (
+                      <div
+                        style={{
+                          backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                          border: '1px solid #10b981',
+                          borderRadius: 10,
+                          padding: '10px 12px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: '#6ee7b7', fontWeight: 700 }}>
+                          Alle 5 zones zijn ingenomen! Klaar voor World Tier {hud.worldTier + 1}?
+                        </span>
+                        <button
+                          onClick={() => sceneRef.current?.resetWorldCampaign()}
+                          style={{
+                            backgroundColor: '#10b981',
+                            color: '#060a12',
+                            border: 'none',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Start World Tier {hud.worldTier + 1}
+                        </button>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => setActiveModal('inventory')}
+                          style={{
+                            backgroundColor: '#1e293b',
+                            color: '#e2e8f0',
+                            border: '1px solid #334155',
+                            borderRadius: 8,
+                            padding: '10px 12px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Gear &amp; Rugzak [I]
+                        </button>
+                        <button
+                          onClick={() => setActiveModal('levelup')}
+                          style={{
+                            backgroundColor: '#1e293b',
+                            color: '#e2e8f0',
+                            border: '1px solid #334155',
+                            borderRadius: 8,
+                            padding: '10px 12px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          DNA Mutaties [J] {hud.dnaPoints > 0 ? `(+${hud.dnaPoints})` : ''}
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => handleEnterDungeon(selectedDungeon.id)}
+                        style={{
+                          background: isSelectedLiberated
+                            ? 'linear-gradient(90deg, #0284c7, #38bdf8)'
+                            : 'linear-gradient(90deg, #059669, #10b981)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 10,
+                          padding: '12px 20px',
+                          fontSize: 13,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
+                        }}
+                      >
+                        {isSelectedLiberated ? 'FARM ZONE OPNIEUW' : 'NEEM ZONE IN'} &rarr;
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* DUNGEON VICTORY & BOSS REWARD SUMMARY */}
-          {!showDungeonSelect && hud.runOutcome === 'VICTORY' && (
+          {/* DUNGEON VICTORY & ZONE INNAME SUMMARY */}
+          {!showWorldMap && hud.runOutcome === 'VICTORY' && (
             <div
               style={{
                 position: 'absolute',
@@ -421,13 +673,14 @@ export default function App() {
                 }}
               >
                 <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 3, color: '#34d399' }}>
-                  DUNGEON CLEARED &bull; BOSS DEFEATED
+                  ZONE LIBERATED &bull; {hud.liberatedZones.length}/{DUNGEONS.length} OP DE WERELDBOL
                 </div>
                 <h2 style={{ margin: '4px 0 6px', fontSize: 28, fontWeight: 900, color: '#ffffff' }}>
-                  {hud.activeDungeon.name.toUpperCase()} VOLTOOID!
+                  {hud.activeDungeon.name.toUpperCase()} INGENOMEN!
                 </h2>
                 <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
-                  Je hebt <strong>{hud.activeDungeon.bossName}</strong> verslagen. Al je XP, Levels en Gear blijven behouden!
+                  <strong>{hud.activeDungeon.bossName}</strong> is uitgeschakeld. Permanente bonus ontgrendeld:{' '}
+                  <strong style={{ color: '#34d399' }}>{ZONE_META[hud.activeDungeon.id]?.captureBonus}</strong>
                 </p>
 
                 <div
@@ -494,10 +747,10 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   >
-                    Herhaal {hud.activeDungeon.name}
+                    Herhaal Zone
                   </button>
                   <button
-                    onClick={() => setShowDungeonSelect(true)}
+                    onClick={() => setShowWorldMap(true)}
                     style={{
                       flex: 1.4,
                       background: 'linear-gradient(90deg, #059669, #10b981)',
@@ -510,7 +763,7 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   >
-                    KIES VOLGENDE DUNGEON &rarr;
+                    TERUG NAAR WERELDBOL &rarr;
                   </button>
                 </div>
               </div>
@@ -518,7 +771,7 @@ export default function App() {
           )}
 
           {/* DUNGEON WIPE (HP = 0, PROGRESSIE BLIJFT BEHOUDEN) */}
-          {!showDungeonSelect && hud.runOutcome === 'WIPE' && (
+          {!showWorldMap && hud.runOutcome === 'WIPE' && (
             <div
               style={{
                 position: 'absolute',
@@ -545,14 +798,14 @@ export default function App() {
                 }}
               >
                 <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 3, color: '#fb7185' }}>
-                  DUNGEON WIPE &bull; VITALITY DEPLETED
+                  AANVAL AFGESLAGEN &bull; VITALITY DEPLETED
                 </div>
                 <h2 style={{ margin: '4px 0 6px', fontSize: 26, fontWeight: 900, color: '#ffffff' }}>
                   VERSLAGEN IN {hud.activeDungeon.name.toUpperCase()}
                 </h2>
                 <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
-                  Geen zorgen: je behoudt je <strong>Level {hud.level}</strong>, al je <strong>DNA-mutaties</strong> en je{' '}
-                  <strong>gevonden gear</strong>!
+                  Je behoudt je <strong>Level {hud.level}</strong>, al je <strong>DNA-mutaties</strong>, je{' '}
+                  <strong>ingenomen zones</strong> en je <strong>gevonden gear</strong>!
                 </p>
 
                 <div
@@ -579,7 +832,7 @@ export default function App() {
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
-                    onClick={() => setShowDungeonSelect(true)}
+                    onClick={() => setShowWorldMap(true)}
                     style={{
                       flex: 1,
                       backgroundColor: '#1e293b',
@@ -592,7 +845,7 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   >
-                    Andere Dungeon Kiezen
+                    Terug naar Wereldbol
                   </button>
                   <button
                     onClick={() => sceneRef.current?.retryCurrentDungeon()}
@@ -608,27 +861,27 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   >
-                    OPNIEUW PROBEREN
+                    VAL OPNIEUW AAN
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* [I] INVENTORY & GEAR MODAL */}
+          {/* [I] INVENTORY & GEAR MODAL (BOVENOP WERELDBOL EN GAME) */}
           {activeModal === 'inventory' && (
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(6, 10, 18, 0.86)',
+                backgroundColor: 'rgba(6, 10, 18, 0.88)',
                 backdropFilter: 'blur(6px)',
                 borderRadius: 12,
                 padding: 20,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 50,
+                zIndex: 55,
               }}
             >
               <div
@@ -737,7 +990,7 @@ export default function App() {
                           color: '#64748b',
                         }}
                       >
-                        Rugzak is leeg. Versla Dungeon Bosses voor gegarandeerde Boss Chest loot!
+                        Rugzak is leeg. Neem zones in op de wereldbol voor gegarandeerde Boss Chest loot!
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 280, overflowY: 'auto' }}>
@@ -803,20 +1056,20 @@ export default function App() {
             </div>
           )}
 
-          {/* [J] LEVEL-UP & DNA MUTATIONS MODAL */}
+          {/* [J] LEVEL-UP & DNA MUTATIONS MODAL (BOVENOP WERELDBOL EN GAME) */}
           {activeModal === 'levelup' && (
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(6, 10, 18, 0.86)',
+                backgroundColor: 'rgba(6, 10, 18, 0.88)',
                 backdropFilter: 'blur(6px)',
                 borderRadius: 12,
                 padding: 20,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 50,
+                zIndex: 55,
               }}
             >
               <div
