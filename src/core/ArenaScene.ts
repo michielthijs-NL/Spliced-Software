@@ -1167,8 +1167,8 @@ export class ArenaScene extends Phaser.Scene {
       this.cameras.main.flash(200, 45, 212, 191, false);
       this.showFloatingText(enemy.sprite.x, enemy.sprite.y - 44, 'EXTRACTION PORTAL UNLOCKED!', '#2dd4bf');
     } else if (enemy.isElite) {
-      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < 0.18 ? 'EXOTIC' : 'RARE');
-    } else if (Math.random() < 0.28) {
+      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < (isBossOrElite ? 0.24 : 0.12) ? 'EXOTIC' : 'RARE');
+    } else const baseDropChance = 0.12; const dropChance = isBoss ? baseDropChance * 2 : baseDropChance; if (Math.random() < dropChance) {
       this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y);
     }
 
