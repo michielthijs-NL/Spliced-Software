@@ -1,34 +1,26 @@
 import Phaser from 'phaser';
 
-export interface SomaticUpgrades {
-  bruteForce: number;
-  flexibleMass: number;
-  isotopeCore: number;
-}
-
-export type ItemRarity = 'COMMON' | 'RARE' | 'EXOTIC';
 export type ItemSlot = 'WEAPON' | 'ARMOR' | 'INJECTOR';
+export type ItemRarity = 'COMMON' | 'RARE' | 'EXOTIC';
 
 export interface LootItem {
   id: string;
   name: string;
   slot: ItemSlot;
   rarity: ItemRarity;
+  description: string;
   stats: {
     damageBonus?: number;
-    attackSpeedPct?: number;
     maxHpBonus?: number;
-    damageReductionPct?: number;
+    speedBonus?: number;
     energyRegenBonus?: number;
-    lifestealOnKill?: number;
   };
-  description: string;
 }
 
-export interface EquippedGear {
-  WEAPON: LootItem | null;
-  ARMOR: LootItem | null;
-  INJECTOR: LootItem | null;
+export interface SomaticUpgrades {
+  bruteForce: number;
+  flexibleMass: number;
+  isotopeCore: number;
 }
 
 export interface HudSnapshot {
@@ -44,176 +36,143 @@ export interface HudSnapshot {
   dnaPoints: number;
   packNumber: number;
   enemiesRemaining: number;
-  cooldowns: {
-    slam: number;
-    dash: number;
-  };
+  cooldowns: { slam: number; dash: number };
   upgrades: SomaticUpgrades;
-  equipped: EquippedGear;
+  equipped: Record<ItemSlot, LootItem | null>;
   inventory: LootItem[];
 }
 
-interface GroundDrop {
-  item: LootItem;
-  orb: Phaser.GameObjects.Arc;
-  ring: Phaser.GameObjects.Arc;
-  label: Phaser.GameObjects.Text;
-  bobOffset: number;
+interface SectorTheme {
+  name: string;
+  bg: number;
+  floorA: number;
+  floorB: number;
+  gridLine: number;
+  wallFill: number;
+  wallTrim: number;
+  accent: string;
 }
 
-interface EnemyEntity {
-  id: number;
-  sprite: Phaser.GameObjects.Sprite;
-  shadow: Phaser.GameObjects.Ellipse;
-  hpBarBg: Phaser.GameObjects.Rectangle;
-  hpBarFill: Phaser.GameObjects.Rectangle;
-  label?: Phaser.GameObjects.Text;
+const SECTOR_THEMES: SectorTheme[] = [
+  {
+    name: 'CRYO REACTOR',
+    bg: 0x0b101b,
+    floorA: 0x111927,
+    floorB: 0x152033,
+    gridLine: 0x1e2d44,
+    wallFill: 0x26354d,
+    wallTrim: 0x38bdf8,
+    accent: '#38bdf8',
+  },
+  {
+    name: 'ISOTOPE FOUNDRY',
+    bg: 0x140d09,
+    floorA: 0x1f1510,
+    floorB: 0x291c15,
+    gridLine: 0x3b281e,
+    wallFill: 0x473023,
+    wallTrim: 0xf59e0b,
+    accent: '#fbbf24',
+  },
+  {
+    name: 'BIO-HAZARD LAB',
+    bg: 0x081410,
+    floorA: 0x0f211b,
+    floorB: 0x142b23,
+    gridLine: 0x1d3d32,
+    wallFill: 0x244a3d,
+    wallTrim: 0x10b981,
+    accent: '#34d399',
+  },
+  {
+    name: 'CRIMSON CONTAINMENT',
+    bg: 0x16090d,
+    floorA: 0x241016,
+    floorB: 0x2e151d,
+    gridLine: 0x451f2b,
+    wallFill: 0x542634,
+    wallTrim: 0xf43f5e,
+    accent: '#fb7185',
+  },
+  {
+    name: 'VOID RELAY',
+    bg: 0x100b1a,
+    floorA: 0x191229,
+    floorB: 0x211836,
+    gridLine: 0x31244f,
+    wallFill: 0x3d2d61,
+    wallTrim: 0xa855f7,
+    accent: '#c084fc',
+  },
+];
+
+interface EnemyData {
+  sprite: Phaser.GameObjects.Container;
+  body: Phaser.Physics.Arcade.Body;
+  hpBar: Phaser.GameObjects.Rectangle;
   hp: number;
   maxHp: number;
   speed: number;
   damage: number;
   xpValue: number;
+  isBoss: boolean;
   isElite: boolean;
-  isBoss?: boolean;
-  affix?: 'ARMORED' | 'FAST' | 'VOLATILE' | 'TITAN';
-  hitCooldown: number;
+  hitFlashUntil: number;
+  lastAttackAt: number;
 }
 
-interface ProjectileEntity {
-  shape: Phaser.GameObjects.Arc;
-  glow: Phaser.GameObjects.Arc;
-  vx: number;
-  vy: number;
+interface ProjectileData {
+  sprite: Phaser.GameObjects.Arc;
+  body: Phaser.Physics.Arcade.Body;
   damage: number;
-  life: number;
+  fromPlayer: boolean;
+  expiresAt: number;
 }
 
-interface WallRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+interface LootDropData {
+  sprite: Phaser.GameObjects.Container;
+  item: LootItem;
 }
-
-const WORLD_WIDTH = 2800;
-const WORLD_HEIGHT = 2100;
-const CAMERA_ZOOM = 0.68;
-
-const POINT_A = { x: 240, y: 260 };
-const POINT_B = { x: 2520, y: 1840 };
-
-const LOOT_POOL: Array<Omit<LootItem, 'id'>> = [
-  {
-    name: 'Scrap Plasma Emitter',
-    slot: 'WEAPON',
-    rarity: 'COMMON',
-    stats: { damageBonus: 6 },
-    description: '+6 Bio-Shot Damage',
-  },
-  {
-    name: 'Reinforced Kevlar Weave',
-    slot: 'ARMOR',
-    rarity: 'COMMON',
-    stats: { maxHpBonus: 30 },
-    description: '+30 Max Vitality (HP)',
-  },
-  {
-    name: 'Basic Glucose Syringe',
-    slot: 'INJECTOR',
-    rarity: 'COMMON',
-    stats: { energyRegenBonus: 5 },
-    description: '+5 Energy Regen / sec',
-  },
-  {
-    name: 'Overclocked Ion Coil',
-    slot: 'WEAPON',
-    rarity: 'RARE',
-    stats: { damageBonus: 12, attackSpeedPct: 14 },
-    description: '+12 Damage, +14% Fire Rate',
-  },
-  {
-    name: 'Mutated Chitin Carapace',
-    slot: 'ARMOR',
-    rarity: 'RARE',
-    stats: { maxHpBonus: 65, damageReductionPct: 12 },
-    description: '+65 Max HP, -12% Damage Taken',
-  },
-  {
-    name: 'Adrenal Splicer Module',
-    slot: 'INJECTOR',
-    rarity: 'RARE',
-    stats: { energyRegenBonus: 9, lifestealOnKill: 6 },
-    description: '+9 Energy/s, +6 HP per Kill',
-  },
-  {
-    name: 'Warden Singularity Core',
-    slot: 'WEAPON',
-    rarity: 'EXOTIC',
-    stats: { damageBonus: 24, attackSpeedPct: 24 },
-    description: '+24 Damage, +24% Fire Rate',
-  },
-  {
-    name: 'Aegis Symbiote Exosuit',
-    slot: 'ARMOR',
-    rarity: 'EXOTIC',
-    stats: { maxHpBonus: 120, damageReductionPct: 22 },
-    description: '+120 Max HP, -22% Damage Taken',
-  },
-  {
-    name: 'Crimson Vampiric Catalyst',
-    slot: 'INJECTOR',
-    rarity: 'EXOTIC',
-    stats: { energyRegenBonus: 15, lifestealOnKill: 14 },
-    description: '+15 Energy/s, +14 HP per Kill',
-  },
-];
 
 export class ArenaScene extends Phaser.Scene {
-  private onHudUpdate?: (snapshot: HudSnapshot) => void;
+  private readonly worldWidth = 2800;
+  private readonly worldHeight = 2100;
 
-  private player!: Phaser.GameObjects.Sprite;
-  private playerShadow!: Phaser.GameObjects.Ellipse;
-  private playerLight!: Phaser.GameObjects.Arc;
+  private player!: Phaser.GameObjects.Container;
+  private playerBody!: Phaser.Physics.Arcade.Body;
   private meltdownAura!: Phaser.GameObjects.Arc;
-
-  private exitPortalOuter!: Phaser.GameObjects.Arc;
-  private exitPortalInner!: Phaser.GameObjects.Arc;
-  private exitPortalLabel!: Phaser.GameObjects.Text;
-  private portalUnlocked = false;
-  private sectorTransitionLock = false;
-
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd!: {
-    W: Phaser.Input.Keyboard.Key;
-    A: Phaser.Input.Keyboard.Key;
-    S: Phaser.Input.Keyboard.Key;
-    D: Phaser.Input.Keyboard.Key;
-    Q: Phaser.Input.Keyboard.Key;
-    SPACE: Phaser.Input.Keyboard.Key;
-  };
-
-  private walls: WallRect[] = [];
   private minimapGraphics!: Phaser.GameObjects.Graphics;
 
-  private enemies: EnemyEntity[] = [];
-  private projectiles: ProjectileEntity[] = [];
-  private groundDrops: GroundDrop[] = [];
-  private nextEnemyId = 1;
-  private nextItemId = 1;
+  private walls!: Phaser.Physics.Arcade.StaticGroup;
+  private wallRects: Phaser.Geom.Rectangle[] = [];
+  private enemies: EnemyData[] = [];
+  private projectiles: ProjectileData[] = [];
+  private lootDrops: LootDropData[] = [];
 
+  // Exit Bulkhead Door bij Point B
+  private exitDoorLeft!: Phaser.GameObjects.Rectangle;
+  private exitDoorRight!: Phaser.GameObjects.Rectangle;
+  private exitDoorBlocker!: Phaser.GameObjects.Rectangle;
+  private exitDoorLabel!: Phaser.GameObjects.Text;
+  private exitDoorZone!: Phaser.Geom.Rectangle;
+  private exitDoorOpen = false;
+  private transitioningSector = false;
+
+  // Player Progression & Stats (Zero-to-Hero)
   private baseMaxHp = 120;
-  private hp = 150;
-  private maxHp = 150;
+  private hp = 120;
+  private baseMaxEnergy = 100;
   private energy = 100;
-  private maxEnergy = 100;
-  private heat = 20;
-  private meltdownTimer = 0;
+  private heat = 0;
+  private meltdownActive = false;
+  private meltdownEndsAt = 0;
 
   private xp = 0;
   private xpToNext = 100;
   private level = 1;
   private dnaPoints = 0;
-  private waveNumber = 1;
+  private sectorNumber = 1;
+  private currentTheme: SectorTheme = SECTOR_THEMES[0];
 
   private upgrades: SomaticUpgrades = {
     bruteForce: 0,
@@ -221,102 +180,105 @@ export class ArenaScene extends Phaser.Scene {
     isotopeCore: 0,
   };
 
-  private equipped: EquippedGear = {
+  private equipped: Record<ItemSlot, LootItem | null> = {
     WEAPON: null,
     ARMOR: null,
     INJECTOR: null,
   };
-
   private inventory: LootItem[] = [];
 
-  private primaryCd = 0;
-  private slamCd = 0;
-  private dashCd = 0;
-  private hudEmitTimer = 0;
+  // Cooldowns & Timers
+  private lastShotAt = 0;
+  private lastSlamAt = -10000;
+  private lastDodgeAt = -10000;
+  private invulnerableUntil = 0;
+  private lastHudPush = 0;
+
+  // Input
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!: {
+    W: Phaser.Input.Keyboard.Key;
+    A: Phaser.Input.Keyboard.Key;
+    S: Phaser.Input.Keyboard.Key;
+    D: Phaser.Input.Keyboard.Key;
+  };
+  private spaceKey!: Phaser.Input.Keyboard.Key;
+  private eKey!: Phaser.Input.Keyboard.Key;
+
+  private hudCallback: ((snapshot: HudSnapshot) => void) | null = null;
 
   constructor() {
     super('ArenaScene');
   }
 
-  public setHudCallback(cb: (snapshot: HudSnapshot) => void) {
-    this.onHudUpdate = cb;
-    this.emitHud();
+  public setHudCallback(cb: (snapshot: HudSnapshot) => void): void {
+    this.hudCallback = cb;
+    this.pushHud(true);
   }
 
-  public applyUpgrade(key: keyof SomaticUpgrades) {
+  public applyUpgrade(stat: keyof SomaticUpgrades): void {
     if (this.dnaPoints <= 0) return;
     this.dnaPoints -= 1;
-    this.upgrades[key] += 1;
-
-    if (key === 'bruteForce') {
-      this.baseMaxHp += 35;
-      this.recalculateStats(35);
+    this.upgrades[stat] += 1;
+    if (stat === 'bruteForce') {
+      this.hp = Math.min(this.getMaxHp(), this.hp + 35);
     }
-
-    this.cameras.main.flash(140, 56, 189, 248, false);
-    this.emitHud();
+    this.pushHud(true);
   }
 
-  public equipItem(itemId: string) {
+  public equipItem(itemId: string): void {
     const idx = this.inventory.findIndex((i) => i.id === itemId);
     if (idx === -1) return;
-
     const item = this.inventory[idx];
-    const previousEquipped = this.equipped[item.slot];
-
-    this.inventory.splice(idx, 1);
-    if (previousEquipped) {
-      this.inventory.push(previousEquipped);
-    }
+    const previous = this.equipped[item.slot];
     this.equipped[item.slot] = item;
-
-    const prevMaxHp = this.maxHp;
-    this.recalculateStats(0);
-    const hpDiff = Math.max(0, this.maxHp - prevMaxHp);
-    if (hpDiff > 0) {
-      this.hp = Math.min(this.maxHp, this.hp + hpDiff);
+    this.inventory.splice(idx, 1);
+    if (previous) {
+      this.inventory.push(previous);
     }
-
-    this.showFloatingText(this.player.x, this.player.y - 34, `EQUIPPED: ${item.name}`, '#38bdf8');
-    this.emitHud();
+    this.hp = Math.min(this.getMaxHp(), this.hp + (item.stats.maxHpBonus ?? 0));
+    this.pushHud(true);
   }
 
-  public salvageItem(itemId: string) {
+  public salvageItem(itemId: string): void {
     const idx = this.inventory.findIndex((i) => i.id === itemId);
     if (idx === -1) return;
-
     const [removed] = this.inventory.splice(idx, 1);
-    const xpGain = removed.rarity === 'EXOTIC' ? 60 : removed.rarity === 'RARE' ? 30 : 15;
+    const xpGain = removed.rarity === 'EXOTIC' ? 90 : removed.rarity === 'RARE' ? 45 : 20;
     this.grantXp(xpGain);
-    this.showFloatingText(this.player.x, this.player.y - 28, `SALVAGED (+${xpGain} XP)`, '#94a3b8');
-    this.emitHud();
+    this.pushHud(true);
   }
 
-  private recalculateStats(healDelta: number) {
-    const armorHp = this.equipped.ARMOR?.stats.maxHpBonus ?? 0;
-    this.maxHp = this.baseMaxHp + armorHp;
-    this.hp = Math.min(this.maxHp, this.hp + healDelta);
+  private getMaxHp(): number {
+    return (
+      this.baseMaxHp +
+      this.upgrades.bruteForce * 35 +
+      (this.equipped.ARMOR?.stats.maxHpBonus ?? 0) +
+      (this.equipped.INJECTOR?.stats.maxHpBonus ?? 0)
+    );
   }
 
-  create() {
-    this.cameras.main.setBackgroundColor('#0b101b');
-    this.generatePixelArtTextures();
+  private getMoveSpeed(): number {
+    return (
+      245 +
+      this.upgrades.flexibleMass * 22 +
+      (this.equipped.ARMOR?.stats.speedBonus ?? 0) +
+      (this.equipped.INJECTOR?.stats.speedBonus ?? 0)
+    );
+  }
 
-    const floor = this.add.tileSprite(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 'dungeon_tile');
-    floor.setDepth(0);
+  private getShotDamage(): number {
+    return (
+      14 +
+      this.upgrades.isotopeCore * 9 +
+      (this.equipped.WEAPON?.stats.damageBonus ?? 0) +
+      (this.equipped.INJECTOR?.stats.damageBonus ?? 0)
+    );
+  }
 
-    this.buildLinearMazeLayout();
-    this.createMarkersAndPortal();
-
-    this.playerLight = this.add.circle(POINT_A.x, POINT_A.y, 175, 0x38bdf8, 0.07).setDepth(2);
-    this.meltdownAura = this.add.circle(POINT_A.x, POINT_A.y, 120, 0xf97316, 0.16).setDepth(3).setVisible(false);
-
-    this.playerShadow = this.add.ellipse(POINT_A.x, POINT_A.y + 14, 24, 10, 0x020617, 0.65).setDepth(9);
-    this.player = this.add.sprite(POINT_A.x, POINT_A.y, 'player_pixel').setScale(2).setDepth(10);
-
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameras.main.setZoom(CAMERA_ZOOM);
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+  public create(): void {
+    this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+    this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
@@ -324,1022 +286,731 @@ export class ArenaScene extends Phaser.Scene {
       A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      Q: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-      SPACE: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
     };
+    this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.eKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const worldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       if (pointer.rightButtonDown()) {
-        this.triggerStretchSlam();
-      } else if (pointer.leftButtonDown() && this.primaryCd <= 0) {
-        this.fireBioShot(worldPt.x, worldPt.y);
+        this.tryStretchSlam();
+      } else if (pointer.leftButtonDown()) {
+        this.tryBioShot(pointer);
       }
     });
 
-    const viewW = this.scale.width || 960;
-    const viewH = this.scale.height || 680;
-    const invZoom = 1 / CAMERA_ZOOM;
-    const offsetX = (viewW * (1 - invZoom)) / 2;
-    const offsetY = (viewH * (1 - invZoom)) / 2;
+    this.buildProceduralSector(true);
+  }
 
+  private buildProceduralSector(isInitial: boolean): void {
+    this.transitioningSector = false;
+    this.exitDoorOpen = false;
+
+    // Wis eerdere objecten bij overgang naar een volgend level
+    if (!isInitial) {
+      this.children.removeAll(true);
+      this.enemies = [];
+      this.projectiles = [];
+      this.lootDrops = [];
+      this.wallRects = [];
+    }
+
+    // Kies een nieuw kleurenthema (altijd anders dan het vorige level)
+    const availableThemes = SECTOR_THEMES.filter((t) => t.name !== this.currentTheme.name);
+    this.currentTheme = Phaser.Utils.Array.GetRandom(availableThemes);
+    this.cameras.main.setBackgroundColor(this.currentTheme.bg);
+
+    // 1. Vloer & Raster
+    const floorGfx = this.add.graphics();
+    const tileSize = 140;
+    for (let x = 0; x < this.worldWidth; x += tileSize) {
+      for (let y = 0; y < this.worldHeight; y += tileSize) {
+        const isAlt = ((x / tileSize + y / tileSize) & 1) === 0;
+        floorGfx.fillStyle(isAlt ? this.currentTheme.floorA : this.currentTheme.floorB, 1);
+        floorGfx.fillRect(x, y, tileSize, tileSize);
+        floorGfx.lineStyle(1, this.currentTheme.gridLine, 0.7);
+        floorGfx.strokeRect(x + 12, y + 12, tileSize - 24, tileSize - 24);
+      }
+    }
+
+    // 2. Procedurele Doolhof-muren (altijd begaanbaar van Point A linksboven naar Point B rechtsonder)
+    this.walls = this.physics.add.staticGroup();
+    const t = 44;
+
+    // Buitenmuren
+    this.addWall(this.worldWidth / 2, t / 2, this.worldWidth, t);
+    this.addWall(this.worldWidth / 2, this.worldHeight - t / 2, this.worldWidth, t);
+    this.addWall(t / 2, this.worldHeight / 2, t, this.worldHeight);
+    this.addWall(this.worldWidth - t / 2, this.worldHeight / 2, t, this.worldHeight);
+
+    // 3 horizontale sectie-barrières met wisselende doorgangen per gegenereerde map
+    const rowY = [540, 1060, 1580];
+    const gapPositions = [
+      Phaser.Math.Between(2150, 2480), // Rij 1 doorgang rechts
+      Phaser.Math.Between(340, 760),   // Rij 2 doorgang links
+      Phaser.Math.Between(1850, 2320), // Rij 3 doorgang rechts-midden
+    ];
+    const gapWidth = 340;
+
+    rowY.forEach((y, idx) => {
+      const gapCenter = gapPositions[idx];
+      const leftWidth = Math.max(120, gapCenter - gapWidth / 2 - t);
+      const rightStart = gapCenter + gapWidth / 2;
+      const rightWidth = Math.max(120, this.worldWidth - t - rightStart);
+
+      this.addWall(t + leftWidth / 2, y, leftWidth, 42);
+      this.addWall(rightStart + rightWidth / 2, y, rightWidth, 42);
+
+      // Procedurele dekking-pilaren in elke gang
+      const pillarCount = Phaser.Math.Between(2, 3);
+      for (let p = 0; p < pillarCount; p++) {
+        const px = Phaser.Math.Between(480, 2300);
+        const py = y - 260 + Phaser.Math.Between(-70, 70);
+        if (Math.abs(px - gapCenter) > 240) {
+          this.addWall(px, py, 56, Phaser.Math.Between(140, 210));
+        }
+      }
+    });
+
+    // Sector-titel in de vloer
+    this.add.text(140, 82, `SECTOR 0${this.sectorNumber} // ${this.currentTheme.name} (POINT A -> DOOR B)`, {
+      fontFamily: 'monospace',
+      fontSize: '15px',
+      color: this.currentTheme.accent,
+    });
+
+    // 3. Point A (Start Airlock)
+    const startX = 280;
+    const startY = 280;
+    this.add.circle(startX, startY, 92, this.currentTheme.wallTrim, 0.14);
+    this.add.circle(startX, startY, 54).setStrokeStyle(2, this.currentTheme.wallTrim, 0.8);
     this.add
-      .text(offsetX + 18, offsetY + 16, 'SECTOR 04 // LINEAR LABYRINTH (POINT A -> POINT B)', {
-        fontSize: '15px',
-        color: '#94a3b8',
+      .text(startX, startY - 76, '[POINT A] ENTRY AIRLOCK', {
         fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#e2e8f0',
       })
-      .setScrollFactor(0)
-      .setDepth(50);
+      .setOrigin(0.5);
 
+    // 4. Point B: Gesloten Sector Bulkhead-Deur (opent pas na verslaan van de baas)
+    const doorX = 2520;
+    const doorY = 1860;
+    this.exitDoorZone = new Phaser.Geom.Rectangle(doorX - 95, doorY - 85, 190, 170);
+
+    // Deurframe
+    this.add.rectangle(doorX, doorY, 190, 140, 0x090d16, 0.9).setStrokeStyle(3, 0x475569);
+    // Deurvleugels (schuiven open zodra baas dood is)
+    this.exitDoorLeft = this.add.rectangle(doorX - 42, doorY, 82, 126, 0x991b1b, 0.95).setStrokeStyle(2, 0xf87171);
+    this.exitDoorRight = this.add.rectangle(doorX + 42, doorY, 82, 126, 0x991b1b, 0.95).setStrokeStyle(2, 0xf87171);
+
+    // Fysieke blokkade tot de baas verslagen is
+    this.exitDoorBlocker = this.add.rectangle(doorX, doorY, 176, 128, 0xff0000, 0);
+    this.physics.add.existing(this.exitDoorBlocker, true);
+
+    this.exitDoorLabel = this.add
+      .text(doorX, doorY - 96, '[LOCKED] VERSLA SECTOR WARDEN', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#f87171',
+        backgroundColor: '#090d16cc',
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5);
+
+    // 5. Speler aanmaken
+    this.createPlayer(startX, startY);
+    this.physics.add.collider(this.player, this.walls);
+    this.physics.add.collider(this.player, this.exitDoorBlocker);
+
+    // 6. Vijanden & Sector Warden Eindbaas spawnen
+    this.spawnSectorEnemies(doorX - 240, doorY - 40);
+
+    // 7. Vaste HUD-elementen op de camera (Minimap & Controls hint)
+    this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(50);
     this.add
       .text(
-        offsetX + 18,
-        offsetY + viewH * invZoom - 28,
-        'WASD: Bewegen | LMB: Bio-Shot | RMB: Stretch-Slam | SPATIE: Phase Dodge | E: Meltdown Ult | Versla Warden voor Portal B',
+        18,
+        648,
+        'WASD: Bewegen | LMB: Bio-Shot | RMB: Stretch-Slam | SPATIE: Dodge | E: Meltdown Ult | Versla Warden -> Door B',
         {
-          fontSize: '13px',
-          color: '#64748b',
           fontFamily: 'monospace',
+          fontSize: '12px',
+          color: '#cbd5e1',
+          backgroundColor: '#060a12bb',
+          padding: { x: 8, y: 3 },
         }
       )
       .setScrollFactor(0)
       .setDepth(50);
 
-    this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(60);
-
-    this.setupSectorRun();
-    this.emitHud();
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+    this.cameras.main.flash(350, 15, 23, 42);
+    this.pushHud(true);
   }
 
-  private createMarkersAndPortal() {
-    // Point A: Entry Pad
-    const entryPad = this.add.circle(POINT_A.x, POINT_A.y, 44, 0x38bdf8, 0.14).setDepth(1);
-    entryPad.setStrokeStyle(2, 0x38bdf8, 0.7);
-    this.add
-      .text(POINT_A.x, POINT_A.y - 56, '[POINT A] ENTRY AIRLOCK', {
-        fontSize: '12px',
-        fontStyle: 'bold',
-        color: '#7dd3fc',
-        fontFamily: 'monospace',
-      })
-      .setOrigin(0.5)
-      .setDepth(4);
-
-    // Point B: Extraction Portal
-    this.exitPortalOuter = this.add.circle(POINT_B.x, POINT_B.y, 56, 0xf43f5e, 0.18).setDepth(2);
-    this.exitPortalOuter.setStrokeStyle(3, 0xf43f5e, 0.9);
-    this.exitPortalInner = this.add.circle(POINT_B.x, POINT_B.y, 28, 0x881337, 0.65).setDepth(3);
-    this.exitPortalLabel = this.add
-      .text(POINT_B.x, POINT_B.y - 72, '[POINT B] PORTAL LOCKED (KILL WARDEN)', {
-        fontSize: '12px',
-        fontStyle: 'bold',
-        color: '#fda4af',
-        backgroundColor: '#020617cc',
-        padding: { x: 6, y: 2 },
-        fontFamily: 'monospace',
-      })
-      .setOrigin(0.5)
-      .setDepth(20);
+  private addWall(x: number, y: number, w: number, h: number): void {
+    const rect = this.add.rectangle(x, y, w, h, this.currentTheme.wallFill);
+    rect.setStrokeStyle(2, this.currentTheme.wallTrim, 0.45);
+    this.walls.add(rect);
+    this.wallRects.push(new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h));
   }
 
-  private setPortalState(unlocked: boolean) {
-    this.portalUnlocked = unlocked;
-    if (unlocked) {
-      this.exitPortalOuter.setFillStyle(0x2dd4bf, 0.25);
-      this.exitPortalOuter.setStrokeStyle(3, 0x5eead4, 1);
-      this.exitPortalInner.setFillStyle(0x38bdf8, 0.8);
-      this.exitPortalLabel.setText('[POINT B] PORTAL OPEN — STEP IN!');
-      this.exitPortalLabel.setColor('#5eead4');
-    } else {
-      this.exitPortalOuter.setFillStyle(0xf43f5e, 0.18);
-      this.exitPortalOuter.setStrokeStyle(3, 0xf43f5e, 0.9);
-      this.exitPortalInner.setFillStyle(0x881337, 0.65);
-      this.exitPortalLabel.setText('[POINT B] PORTAL LOCKED (KILL WARDEN)');
-      this.exitPortalLabel.setColor('#fda4af');
-    }
+  private createPlayer(x: number, y: number): void {
+    this.meltdownAura = this.add.circle(0, 0, 86, 0xf97316, 0.22);
+    this.meltdownAura.setStrokeStyle(2, 0xfb923c, 0.85);
+    this.meltdownAura.setVisible(false);
+
+    const torso = this.add.rectangle(0, 0, 26, 28, 0x38bdf8);
+    const visor = this.add.rectangle(0, -6, 18, 8, 0xf8fafc);
+    const core = this.add.circle(0, 4, 5, 0xf43f5e);
+
+    this.player = this.add.container(x, y, [this.meltdownAura, torso, visor, core]);
+    this.physics.add.existing(this.player);
+    this.playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    this.playerBody.setSize(26, 26);
+    this.playerBody.setOffset(-13, -13);
+    this.playerBody.setCollideWorldBounds(true);
   }
 
-  private setupSectorRun() {
-    this.sectorTransitionLock = false;
-    this.setPortalState(false);
+  private spawnSectorEnemies(bossX: number, bossY: number): void {
+    // 19 gewone / elite vijanden verspreid over de 4 gangen
+    const laneCenters = [300, 800, 1320, 1840];
+    const totalMobs = 18 + Math.min(8, this.sectorNumber);
 
-    // Starter drop near Point A + 2 secret alcove loot drops along the maze
-    this.spawnLootDrop(POINT_A.x + 120, POINT_A.y, 'COMMON');
-    this.spawnLootDrop(2480, 240, 'RARE');   // Alcove 1 (North-East dead-end)
-    this.spawnLootDrop(260, 1840, 'EXOTIC'); // Alcove 2 (South-West dead-end)
-
-    this.spawnLinearMazeEnemies();
-  }
-
-  private generatePixelArtTextures() {
-    if (this.textures.exists('dungeon_tile')) return;
-
-    const tileCanvas = this.textures.createCanvas('dungeon_tile', 48, 48)!;
-    const tCtx = tileCanvas.getContext();
-    tCtx.fillStyle = '#16202e';
-    tCtx.fillRect(0, 0, 48, 48);
-    tCtx.fillStyle = '#0f1722';
-    tCtx.fillRect(0, 46, 48, 2);
-    tCtx.fillRect(46, 0, 2, 48);
-    tCtx.fillStyle = '#1e2b3d';
-    tCtx.fillRect(0, 0, 46, 2);
-    tCtx.fillRect(0, 0, 2, 46);
-    tCtx.strokeStyle = '#111926';
-    tCtx.lineWidth = 2;
-    tCtx.strokeRect(10, 10, 26, 26);
-    tCtx.strokeStyle = '#223145';
-    tCtx.strokeRect(12, 12, 22, 22);
-    tileCanvas.refresh();
-
-    const makePixelSprite = (key: string, grid: string[], palette: Record<string, string>) => {
-      const h = grid.length;
-      const w = grid[0].length;
-      const c = this.textures.createCanvas(key, w, h)!;
-      const ctx = c.getContext();
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const ch = grid[y][x];
-          if (ch !== '.' && palette[ch]) {
-            ctx.fillStyle = palette[ch];
-            ctx.fillRect(x, y, 1, 1);
-          }
-        }
+    for (let i = 0; i < totalMobs; i++) {
+      const lane = laneCenters[i % laneCenters.length];
+      let ex = Phaser.Math.Between(420, 2480);
+      let ey = lane + Phaser.Math.Between(-130, 130);
+      if (Phaser.Math.Distance.Between(ex, ey, 280, 280) < 420) {
+        ex += 550;
       }
-      c.refresh();
-    };
-
-    makePixelSprite(
-      'player_pixel',
-      [
-        '.....CCCCCC.....',
-        '....CCCCCCCC....',
-        '....CCWWWWCC....',
-        '.....CCCCCC.....',
-        '...RRRRRRRRRR...',
-        '..RRRRRRRRRRRR..',
-        '.RRRRDDDDDDRRRR.',
-        '.RRRRDDDDDDRRRR.',
-        '.RRRR.DDDD.RRRR.',
-        '..RR..DDDD..RR..',
-        '..RR..BBBB..RR..',
-        '......BBBB......',
-        '.....BB..BB.....',
-        '.....BB..BB.....',
-        '....BB....BB....',
-        '....DD....DD....',
-      ],
-      {
-        C: '#38bdf8',
-        W: '#e0f2fe',
-        R: '#f43f5e',
-        D: '#1e293b',
-        B: '#64748b',
-      }
-    );
-
-    makePixelSprite(
-      'enemy_minion',
-      [
-        '.....KKKKKK.....',
-        '....KSSSSSSK....',
-        '....KSESESEK....',
-        '....KSSSSSSK....',
-        '...RRRRRRRRRR...',
-        '..RRRRDDDDDRRR..',
-        '.RRR.DDDDDDD.RRR',
-        '.RR..DDDDDDD..RR',
-        '.....DDDDDDD....',
-        '.....DD...DD....',
-        '....DD.....DD...',
-        '....KK.....KK...',
-      ],
-      {
-        K: '#0f172a',
-        S: '#e2e8f0',
-        E: '#ef4444',
-        R: '#991b1b',
-        D: '#334155',
-      }
-    );
-
-    makePixelSprite(
-      'enemy_elite',
-      [
-        '......GGGGGGGG......',
-        '.....GMMMMMMMMG.....',
-        '....GMYYYYYYYYMG....',
-        '...GGMMMMMMMMMMGG...',
-        '..GGGGMMMMMMMMGGGG..',
-        '.GGGG.MMMMMMMM.GGGG.',
-        '.GGGG.MMRRRRMM.GGGG.',
-        '.GGGG.MMMMMMMM.GGGG.',
-        '..GG..MMMMMMMM..GG..',
-        '......MMM..MMM......',
-        '.....MMM....MMM.....',
-        '....GGG......GGG....',
-      ],
-      {
-        G: '#f59e0b',
-        M: '#334155',
-        Y: '#fef08a',
-        R: '#ef4444',
-      }
-    );
-
-    makePixelSprite(
-      'boss_warden',
-      [
-        '..........TTTTTTTTTTTT..........',
-        '........TTTTTTTTTTTTTTTT........',
-        '.......TTTTTTTTTTTTTTTTTT.......',
-        '......TTTTDDDDDDDDDDDDTTTT......',
-        '..TTTTTTTDDDDDDDDDDDDDDTTTTTTT..',
-        '.TTTTTTTTDDDRRDDDDDDRRDDDTTTTTTT',
-        '.TTTTTTTTDDDDDDDDDDDDDDDDTTTTTTT',
-        '.TTTTDDDDDDDDDDDDDDDDDDDDDDTTTT.',
-        '.TTTTDDDDDDTTTTTTTTTTDDDDDDTTTT.',
-        '.TTTTDDDDDDDDDDDDDDDDDDDDDDTTTT.',
-        '.DDDD.DDDDDDDDDDDDDDDDDDDD.DDDD.',
-        '.DDDD..DDDDDDDDDDDDDDDDDD..DDDD.',
-        'DDDDDD..DDDDDDDDDDDDDDDD..DDDDDD',
-        'DD.DDD...DDDDDD..DDDDDD...DDD.DD',
-        'DD..DD...DDDDD....DDDDD...DD..DD',
-        '.........DDDD......DDDD.........',
-        '........DDDD........DDDD........',
-        '.......DDDDD........DDDDD.......',
-        '......DDDDDD........DDDDDD......',
-      ],
-      {
-        T: '#2dd4bf',
-        D: '#1e1b2e',
-        R: '#fb7185',
-      }
-    );
-  }
-
-  private buildLinearMazeLayout() {
-    // Winding labyrinth from Point A (top-left) -> East -> South-West -> South-East Boss Chamber (Point B)
-    this.walls = [
-      // Outer perimeter
-      { x: 0, y: 0, w: WORLD_WIDTH, h: 64 },
-      { x: 0, y: WORLD_HEIGHT - 64, w: WORLD_WIDTH, h: 64 },
-      { x: 0, y: 0, w: 64, h: WORLD_HEIGHT },
-      { x: WORLD_WIDTH - 64, y: 0, w: 64, h: WORLD_HEIGHT },
-
-      // Corridor 1 bottom wall (forces player East from Point A, with choke-pillars)
-      { x: 64, y: 460, w: 1860, h: 64 },
-      { x: 640, y: 64, w: 56, h: 170 },
-      { x: 1180, y: 290, w: 56, h: 170 },
-      { x: 1720, y: 64, w: 56, h: 170 },
-
-      // Divider between NE loot alcove (y < 460, x > 2180) and Corridor 2
-      { x: 2180, y: 460, w: 556, h: 64 },
-
-      // Corridor 2 (runs West from x=2180 back to x=280)
-      { x: 520, y: 740, w: 2216, h: 64 },
-      { x: 1620, y: 524, w: 56, h: 100 },
-      { x: 1040, y: 640, w: 56, h: 100 },
-
-      // Corridor 3 (runs East from x=280 across middle-south to x=2220)
-      { x: 64, y: 1040, w: 1920, h: 64 },
-      { x: 760, y: 804, w: 56, h: 110 },
-      { x: 1420, y: 930, w: 56, h: 110 },
-
-      // Corridor 4 (runs West from x=2220 to x=520, leading to SW Secret Alcove & Final Gate)
-      { x: 520, y: 1340, w: 2216, h: 64 },
-      { x: 1820, y: 1104, w: 56, h: 110 },
-      { x: 1120, y: 1230, w: 56, h: 110 },
-
-      // South-West Secret Alcove barrier (keeps alcove at x < 460, y > 1580 tucked away)
-      { x: 460, y: 1600, w: 64, h: 436 },
-      { x: 64, y: 1600, w: 210, h: 56 },
-
-      // Final Boss Chamber Gate (narrow entry at x=1680 into SE Boss Arena)
-      { x: 1680, y: 1404, w: 64, h: 320 },
-      { x: 1680, y: 1920, w: 64, h: 116 },
-
-      // Cover pillars inside Boss Chamber
-      { x: 2040, y: 1580, w: 72, h: 72 },
-      { x: 2040, y: 1840, w: 72, h: 72 },
-    ];
-
-    const wallGraphics = this.add.graphics().setDepth(5);
-    for (const w of this.walls) {
-      wallGraphics.fillStyle(0x020617, 0.55);
-      wallGraphics.fillRect(w.x + 8, w.y + 14, w.w, w.h);
-
-      wallGraphics.fillStyle(0x273549, 1);
-      wallGraphics.fillRect(w.x, w.y, w.w, w.h);
-
-      const faceHeight = Math.min(18, w.h * 0.4);
-      wallGraphics.fillStyle(0x131c29, 1);
-      wallGraphics.fillRect(w.x, w.y + w.h - faceHeight, w.w, faceHeight);
-
-      wallGraphics.lineStyle(2, 0x475569, 0.9);
-      wallGraphics.strokeRect(w.x, w.y, w.w, w.h);
-
-      if (w.w <= 120 && w.h <= 180 && w.x > 100) {
-        wallGraphics.fillStyle(0xef4444, 1);
-        wallGraphics.fillRect(w.x + w.w / 2 - 4, w.y + w.h - faceHeight + 5, 8, 5);
-        this.add.circle(w.x + w.w / 2, w.y + w.h - 8, 28, 0xef4444, 0.06).setDepth(4);
-      }
-    }
-  }
-
-  private isInsideWall(x: number, y: number, radius: number): boolean {
-    for (const w of this.walls) {
-      const closestX = Phaser.Math.Clamp(x, w.x, w.x + w.w);
-      const closestY = Phaser.Math.Clamp(y, w.y, w.y + w.h);
-      const dx = x - closestX;
-      const dy = y - closestY;
-      if (dx * dx + dy * dy < radius * radius) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private moveWithWallSlide(obj: Phaser.GameObjects.Sprite, dx: number, dy: number, radius: number) {
-    const nextX = Phaser.Math.Clamp(obj.x + dx, radius + 68, WORLD_WIDTH - radius - 68);
-    if (!this.isInsideWall(nextX, obj.y, radius)) {
-      obj.x = nextX;
+      const isElite = i % 5 === 4;
+      this.createEnemy(ex, ey, false, isElite);
     }
 
-    const nextY = Phaser.Math.Clamp(obj.y + dy, radius + 68, WORLD_HEIGHT - radius - 68);
-    if (!this.isInsideWall(obj.x, nextY, radius)) {
-      obj.y = nextY;
-    }
+    // 1 Sector Warden Eindbaas vlak voor de vergrendelde deur bij Point B
+    this.createEnemy(bossX, bossY, true, true);
   }
 
-  update(time: number, delta: number) {
+  private createEnemy(x: number, y: number, isBoss: boolean, isElite: boolean): void {
+    const scale = 1 + (this.sectorNumber - 1) * 0.22;
+    const maxHp = Math.round((isBoss ? 480 : isElite ? 125 : 52) * scale);
+    const speed = isBoss ? 125 : isElite ? 145 : 130;
+    const damage = Math.round((isBoss ? 24 : isElite ? 15 : 10) * (1 + (this.sectorNumber - 1) * 0.12));
+    const xpValue = isBoss ? 240 : isElite ? 65 : 28;
+
+    const size = isBoss ? 46 : isElite ? 30 : 22;
+    const color = isBoss ? 0xf59e0b : isElite ? 0xa855f7 : 0xef4444;
+
+    const bodyRect = this.add.rectangle(0, 0, size, size, color).setStrokeStyle(2, 0xffffff, 0.35);
+    const eye = this.add.rectangle(0, -4, size * 0.6, 5, 0x090d16);
+    const hpBg = this.add.rectangle(0, -size / 2 - 10, size + 10, 5, 0x090d16);
+    const hpBar = this.add.rectangle(0, -size / 2 - 10, size + 10, 5, isBoss ? 0xfacc15 : 0xf43f5e);
+
+    const children: Phaser.GameObjects.GameObject[] = [bodyRect, eye, hpBg, hpBar];
+    if (isBoss || isElite) {
+      const tag = this.add
+        .text(0, -size / 2 - 22, isBoss ? '★ SECTOR WARDEN' : '★ ELITE', {
+          fontFamily: 'monospace',
+          fontSize: isBoss ? '12px' : '10px',
+          fontStyle: 'bold',
+          color: isBoss ? '#facc15' : '#e879f9',
+        })
+        .setOrigin(0.5);
+      children.push(tag);
+    }
+
+    const container = this.add.container(x, y, children);
+    this.physics.add.existing(container);
+    const body = container.body as Phaser.Physics.Arcade.Body;
+    body.setSize(size, size);
+    body.setOffset(-size / 2, -size / 2);
+    body.setCollideWorldBounds(true);
+
+    this.physics.add.collider(container, this.walls);
+
+    this.enemies.push({
+      sprite: container,
+      body,
+      hpBar,
+      hp: maxHp,
+      maxHp,
+      speed,
+      damage,
+      xpValue,
+      isBoss,
+      isElite,
+      hitFlashUntil: 0,
+      lastAttackAt: 0,
+    });
+  }
+
+  private unlockExitDoor(): void {
+    if (this.exitDoorOpen) return;
+    this.exitDoorOpen = true;
+
+    // Verwijder fysieke blokkade
+    if (this.exitDoorBlocker && this.exitDoorBlocker.body) {
+      (this.exitDoorBlocker.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    }
+
+    // Kleur deur groen en schuif de vleugels open
+    this.exitDoorLeft.setFillStyle(0x10b981, 0.95).setStrokeStyle(2, 0x6ee7b7);
+    this.exitDoorRight.setFillStyle(0x10b981, 0.95).setStrokeStyle(2, 0x6ee7b7);
+
+    this.tweens.add({
+      targets: this.exitDoorLeft,
+      x: this.exitDoorLeft.x - 52,
+      duration: 650,
+      ease: 'Power2',
+    });
+    this.tweens.add({
+      targets: this.exitDoorRight,
+      x: this.exitDoorRight.x + 52,
+      duration: 650,
+      ease: 'Power2',
+    });
+
+    this.exitDoorLabel.setText(`[OPEN] LOOP DOOR DE DEUR -> SECTOR 0${this.sectorNumber + 1}`);
+    this.exitDoorLabel.setColor('#34d399');
+    this.cameras.main.shake(220, 0.006);
+  }
+
+  public update(time: number, delta: number): void {
+    if (this.transitioningSector) return;
+
     const dt = delta / 1000;
 
-    this.primaryCd = Math.max(0, this.primaryCd - delta);
-    this.slamCd = Math.max(0, this.slamCd - delta);
-    this.dashCd = Math.max(0, this.dashCd - delta);
+    // Regeneratie van Bio-Energy & afkoelen van Heat
+    const regenRate = 6 + (this.equipped.INJECTOR?.stats.energyRegenBonus ?? 0);
+    this.energy = Math.min(this.baseMaxEnergy, this.energy + regenRate * dt);
 
-    const regenBonus = this.equipped.INJECTOR?.stats.energyRegenBonus ?? 0;
-    this.energy = Math.min(this.maxEnergy, this.energy + (14 + regenBonus) * dt);
-
-    if (this.meltdownTimer > 0) {
-      this.meltdownTimer = Math.max(0, this.meltdownTimer - delta);
-      this.heat = Math.max(0, (this.meltdownTimer / (4500 + this.upgrades.isotopeCore * 800)) * 100);
-      this.meltdownAura.setVisible(true);
-      this.meltdownAura.setPosition(this.player.x, this.player.y);
-      this.applyMeltdownAuraDamage(dt);
+    if (this.meltdownActive) {
+      if (time >= this.meltdownEndsAt) {
+        this.meltdownActive = false;
+        this.meltdownAura.setVisible(false);
+      } else {
+        this.heat = Math.max(0, this.heat - 14 * dt);
+        this.applyMeltdownAuraDamage(dt);
+      }
     } else {
-      this.meltdownAura.setVisible(false);
-      this.heat = Math.max(0, this.heat - 4 * dt);
+      this.heat = Math.max(0, this.heat - 3.5 * dt);
     }
 
+    // Beweging (WASD / Pijltjes)
     let vx = 0;
     let vy = 0;
-    if (this.cursors.left.isDown || this.wasd.A.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.wasd.D.isDown) vx += 1;
-    if (this.cursors.up.isDown || this.wasd.W.isDown) vy -= 1;
-    if (this.cursors.down.isDown || this.wasd.S.isDown) vy += 1;
+    if (this.wasd.A.isDown || this.cursors.left.isDown) vx -= 1;
+    if (this.wasd.D.isDown || this.cursors.right.isDown) vx += 1;
+    if (this.wasd.W.isDown || this.cursors.up.isDown) vy -= 1;
+    if (this.wasd.S.isDown || this.cursors.down.isDown) vy += 1;
 
     if (vx !== 0 || vy !== 0) {
       const len = Math.hypot(vx, vy);
-      const speed = 265 + this.upgrades.flexibleMass * 22;
-      this.moveWithWallSlide(this.player, (vx / len) * speed * dt, (vy / len) * speed * dt, 15);
-      if (vx < 0) this.player.setFlipX(true);
-      if (vx > 0) this.player.setFlipX(false);
+      const speed = this.getMoveSpeed();
+      this.playerBody.setVelocity((vx / len) * speed, (vy / len) * speed);
+    } else {
+      this.playerBody.setVelocity(0, 0);
     }
 
-    this.playerShadow.setPosition(this.player.x, this.player.y + 14);
-    this.playerLight.setPosition(this.player.x, this.player.y);
-
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.Q) && this.dashCd <= 0 && this.energy >= 20) {
-      this.triggerPhaseDash(vx, vy);
+    // SPATIE = Phase Dodge
+    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      this.tryPhaseDodge(time, vx, vy);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.SPACE) && this.heat >= 80 && this.meltdownTimer <= 0) {
-      this.triggerMeltdown();
+    // E = Meltdown Ultimate
+    if (Phaser.Input.Keyboard.JustDown(this.eKey)) {
+      this.tryActivateMeltdown(time);
     }
 
-    if (this.input.activePointer.leftButtonDown() && this.primaryCd <= 0) {
-      const worldPt = this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y);
-      this.fireBioShot(worldPt.x, worldPt.y);
+    // Auto-fire als linkermuisknop ingedrukt blijft
+    if (this.input.activePointer.leftButtonDown()) {
+      this.tryBioShot(this.input.activePointer);
     }
 
-    this.updateProjectiles(dt);
-    this.updateEnemies(dt);
-    this.updateGroundDrops(time, dt);
-    this.updateExtractionPortal(time);
+    this.updateProjectiles(time);
+    this.updateEnemies(time);
+    this.updateLootPickups();
+    this.checkExitDoorTransition();
     this.drawMinimap();
 
-    this.hudEmitTimer += delta;
-    if (this.hudEmitTimer >= 100) {
-      this.hudEmitTimer = 0;
-      this.emitHud();
+    if (time - this.lastHudPush > 90) {
+      this.lastHudPush = time;
+      this.pushHud(false);
     }
   }
 
-  private updateExtractionPortal(time: number) {
-    const pulse = 1 + Math.sin(time / 240) * 0.08;
-    this.exitPortalOuter.setScale(pulse);
+  private tryBioShot(pointer: Phaser.Input.Pointer): void {
+    const now = this.time.now;
+    const fireInterval = Math.max(130, 260 - this.upgrades.flexibleMass * 22);
+    if (now - this.lastShotAt < fireInterval) return;
+    this.lastShotAt = now;
 
-    if (!this.portalUnlocked || this.sectorTransitionLock) return;
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, worldPoint.x, worldPoint.y);
 
-    const distToPortal = Phaser.Math.Distance.Between(this.player.x, this.player.y, POINT_B.x, POINT_B.y);
-    if (distToPortal <= 54) {
-      this.sectorTransitionLock = true;
-      this.waveNumber += 1;
-
-      // Clear leftover enemies & old ground drops before starting next sector run
-      for (const e of this.enemies) {
-        e.sprite.destroy();
-        e.shadow.destroy();
-        e.hpBarBg.destroy();
-        e.hpBarFill.destroy();
-        e.label?.destroy();
-      }
-      this.enemies = [];
-
-      for (const d of this.groundDrops) {
-        d.orb.destroy();
-        d.ring.destroy();
-        d.label.destroy();
-      }
-      this.groundDrops = [];
-
-      this.player.setPosition(POINT_A.x, POINT_A.y);
-      this.hp = this.maxHp;
-      this.energy = this.maxEnergy;
-      this.cameras.main.flash(260, 45, 212, 191, false);
-      this.showFloatingText(POINT_A.x, POINT_A.y - 44, `SECTOR DEPTH ${this.waveNumber} // NEW RUN`, '#2dd4bf');
-
-      this.setupSectorRun();
-      this.emitHud();
-    }
-  }
-
-  private spawnLootDrop(x: number, y: number, forcedRarity?: ItemRarity) {
-    const roll = Math.random();
-    const rarity: ItemRarity =
-      forcedRarity ?? (roll < 0.14 ? 'EXOTIC' : roll < 0.48 ? 'RARE' : 'COMMON');
-
-    const candidates = LOOT_POOL.filter((item) => item.rarity === rarity);
-    const template = candidates[Math.floor(Math.random() * candidates.length)];
-
-    const item: LootItem = {
-      ...template,
-      id: `item_${this.nextItemId++}`,
-    };
-
-    const colorHex = rarity === 'EXOTIC' ? 0xf59e0b : rarity === 'RARE' ? 0x38bdf8 : 0x34d399;
-    const textColor = rarity === 'EXOTIC' ? '#fbbf24' : rarity === 'RARE' ? '#7dd3fc' : '#6ee7b7';
-
-    const ring = this.add.circle(x, y, 18, colorHex, 0.22).setDepth(7);
-    const orb = this.add.circle(x, y, 8, colorHex, 1).setDepth(8);
-    orb.setStrokeStyle(2, 0xffffff);
-
-    const label = this.add
-      .text(x, y - 22, `[${rarity}] ${item.name}`, {
-        fontSize: '11px',
-        fontStyle: 'bold',
-        color: textColor,
-        backgroundColor: '#020617cc',
-        padding: { x: 4, y: 2 },
-        fontFamily: 'monospace',
-      })
-      .setOrigin(0.5)
-      .setDepth(25);
-
-    this.groundDrops.push({
-      item,
-      orb,
-      ring,
-      label,
-      bobOffset: Math.random() * Math.PI * 2,
-    });
-  }
-
-  private updateGroundDrops(time: number, dt: number) {
-    for (let i = this.groundDrops.length - 1; i >= 0; i--) {
-      const drop = this.groundDrops[i];
-      const bob = Math.sin(time / 220 + drop.bobOffset) * 3;
-      drop.orb.y += bob * dt * 4;
-      drop.ring.setPosition(drop.orb.x, drop.orb.y);
-      drop.label.setPosition(drop.orb.x, drop.orb.y - 24);
-
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, drop.orb.x, drop.orb.y);
-
-      if (dist < 130 && this.inventory.length < 12) {
-        drop.orb.x = Phaser.Math.Linear(drop.orb.x, this.player.x, Math.min(1, 6 * dt));
-        drop.orb.y = Phaser.Math.Linear(drop.orb.y, this.player.y, Math.min(1, 6 * dt));
-      }
-
-      if (dist <= 36) {
-        if (this.inventory.length >= 12) {
-          continue;
-        }
-        this.inventory.push(drop.item);
-        const color = drop.item.rarity === 'EXOTIC' ? '#fbbf24' : drop.item.rarity === 'RARE' ? '#38bdf8' : '#34d399';
-        this.showFloatingText(this.player.x, this.player.y - 34, `+ ${drop.item.name}`, color);
-
-        drop.orb.destroy();
-        drop.ring.destroy();
-        drop.label.destroy();
-        this.groundDrops.splice(i, 1);
-        this.emitHud();
-      }
-    }
-  }
-
-  private drawMinimap() {
-    const viewW = this.scale.width || 960;
-    const invZoom = 1 / CAMERA_ZOOM;
-    const offsetX = (viewW * (1 - invZoom)) / 2;
-    const offsetY = ((this.scale.height || 680) * (1 - invZoom)) / 2;
-
-    const mapW = 190;
-    const mapH = 142;
-    const padX = offsetX + viewW * invZoom - mapW - 18;
-    const padY = offsetY + 18;
-    const scaleX = mapW / WORLD_WIDTH;
-    const scaleY = mapH / WORLD_HEIGHT;
-
-    this.minimapGraphics.clear();
-    this.minimapGraphics.fillStyle(0x020617, 0.88);
-    this.minimapGraphics.fillRect(padX, padY, mapW, mapH);
-    this.minimapGraphics.lineStyle(1.5, 0x334155, 1);
-    this.minimapGraphics.strokeRect(padX, padY, mapW, mapH);
-
-    // Maze walls
-    this.minimapGraphics.fillStyle(0x475569, 0.95);
-    for (const w of this.walls) {
-      this.minimapGraphics.fillRect(
-        padX + w.x * scaleX,
-        padY + w.y * scaleY,
-        Math.max(2, w.w * scaleX),
-        Math.max(2, w.h * scaleY)
-      );
-    }
-
-    // Point A marker (blue ring)
-    this.minimapGraphics.lineStyle(1.5, 0x38bdf8, 1);
-    this.minimapGraphics.strokeCircle(padX + POINT_A.x * scaleX, padY + POINT_A.y * scaleY, 4);
-
-    // Point B Extraction Portal marker (teal when open, red when locked)
-    this.minimapGraphics.fillStyle(this.portalUnlocked ? 0x2dd4bf : 0xf43f5e, 1);
-    this.minimapGraphics.fillCircle(padX + POINT_B.x * scaleX, padY + POINT_B.y * scaleY, 5);
-
-    // Loot orbs
-    for (const drop of this.groundDrops) {
-      this.minimapGraphics.fillStyle(drop.item.rarity === 'EXOTIC' ? 0xfbbf24 : 0x34d399, 1);
-      this.minimapGraphics.fillCircle(padX + drop.orb.x * scaleX, padY + drop.orb.y * scaleY, 2.5);
-    }
-
-    // Enemies
-    for (const enemy of this.enemies) {
-      this.minimapGraphics.fillStyle(enemy.isBoss ? 0x2dd4bf : enemy.isElite ? 0xf59e0b : 0xf43f5e, 1);
-      const dotSize = enemy.isBoss ? 6 : enemy.isElite ? 4 : 2.5;
-      this.minimapGraphics.fillRect(
-        padX + enemy.sprite.x * scaleX - dotSize / 2,
-        padY + enemy.sprite.y * scaleY - dotSize / 2,
-        dotSize,
-        dotSize
-      );
-    }
-
-    // Player dot
-    this.minimapGraphics.fillStyle(0xffffff, 1);
-    this.minimapGraphics.fillCircle(padX + this.player.x * scaleX, padY + this.player.y * scaleY, 3.5);
-  }
-
-  private fireBioShot(targetX: number, targetY: number) {
-    const weaponSpeedBonus = (this.equipped.WEAPON?.stats.attackSpeedPct ?? 0) / 100;
-    const baseInterval = Math.max(130, 300 - this.upgrades.flexibleMass * 28);
-    this.primaryCd = Math.max(95, Math.round(baseInterval / (1 + weaponSpeedBonus)));
-
-    const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
-    this.player.setFlipX(Math.cos(angle) < 0);
-
-    const speed = 640;
-    const glow = this.add.circle(this.player.x, this.player.y, 11, 0x38bdf8, 0.25).setDepth(11);
-    const bullet = this.add.circle(this.player.x, this.player.y, 5, 0xe0f2fe).setDepth(12);
-
-    const weaponDamage = this.equipped.WEAPON?.stats.damageBonus ?? 0;
-    const baseDamage = 24 + this.upgrades.isotopeCore * 9 + weaponDamage;
-    const multiplier = this.meltdownTimer > 0 ? 1.65 : 1;
+    const bullet = this.add.circle(this.player.x, this.player.y, 5, 0x38bdf8);
+    this.physics.add.existing(bullet);
+    const body = bullet.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(Math.cos(angle) * 620, Math.sin(angle) * 620);
 
     this.projectiles.push({
-      shape: bullet,
-      glow,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      damage: Math.round(baseDamage * multiplier),
-      life: 1.5,
+      sprite: bullet,
+      body,
+      damage: this.getShotDamage(),
+      fromPlayer: true,
+      expiresAt: now + 1300,
     });
-
-    this.energy = Math.min(this.maxEnergy, this.energy + 8);
-    this.heat = Math.min(100, this.heat + 6);
   }
 
-  private triggerStretchSlam() {
-    if (this.slamCd > 0 || this.energy < 25) return;
+  private tryStretchSlam(): void {
+    const now = this.time.now;
+    if (now - this.lastSlamAt < 3200 || this.energy < 25) return;
+    this.lastSlamAt = now;
     this.energy -= 25;
-    this.slamCd = 1600;
     this.heat = Math.min(100, this.heat + 18);
 
-    const weaponDamage = this.equipped.WEAPON?.stats.damageBonus ?? 0;
-    const radius = 135 + this.upgrades.bruteForce * 14;
-    const damage = Math.round((58 + this.upgrades.bruteForce * 22 + weaponDamage) * (this.meltdownTimer > 0 ? 1.5 : 1));
+    const radius = 115 + this.upgrades.bruteForce * 14;
+    const slamDmg = 34 + this.upgrades.bruteForce * 22;
 
-    const ring = this.add.circle(this.player.x, this.player.y, radius, 0xf43f5e, 0.26).setDepth(8);
-    ring.setStrokeStyle(3, 0xfb7185);
+    const ring = this.add.circle(this.player.x, this.player.y, 20, 0xf43f5e, 0.25).setStrokeStyle(3, 0xfb7185);
     this.tweens.add({
       targets: ring,
+      radius,
       alpha: 0,
-      scale: 1.15,
-      duration: 260,
+      duration: 280,
       onComplete: () => ring.destroy(),
     });
 
-    this.cameras.main.shake(120, 0.008);
-
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const enemy = this.enemies[i];
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.sprite.x, enemy.sprite.y);
-      if (dist <= radius + (enemy.isBoss ? 36 : 16)) {
-        if (!enemy.isBoss) {
-          const pushAngle = Math.atan2(enemy.sprite.y - this.player.y, enemy.sprite.x - this.player.x);
-          this.moveWithWallSlide(
-            enemy.sprite,
-            Math.cos(pushAngle) * 44,
-            Math.sin(pushAngle) * 44,
-            enemy.isElite ? 20 : 14
-          );
-        }
-        this.damageEnemy(enemy, damage, true);
+      const e = this.enemies[i];
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, e.sprite.x, e.sprite.y) <= radius) {
+        this.damageEnemy(i, slamDmg);
       }
     }
+    this.pushHud(true);
   }
 
-  private triggerPhaseDash(vx: number, vy: number) {
-    const worldPt = this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y);
-    const angle =
-      vx !== 0 || vy !== 0
-        ? Math.atan2(vy, vx)
-        : Math.atan2(worldPt.y - this.player.y, worldPt.x - this.player.x);
+  private tryPhaseDodge(time: number, vx: number, vy: number): void {
+    const cd = Math.max(950, 2200 - this.upgrades.flexibleMass * 220);
+    if (time - this.lastDodgeAt < cd || this.energy < 20) return;
 
-    const candidateDistances = [180, 140, 100, 70];
-    let destX: number | null = null;
-    let destY: number | null = null;
-
-    for (const dist of candidateDistances) {
-      const tx = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * dist, 84, WORLD_WIDTH - 84);
-      const ty = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * dist, 84, WORLD_HEIGHT - 84);
-      if (!this.isInsideWall(tx, ty, 15)) {
-        destX = tx;
-        destY = ty;
-        break;
-      }
-    }
-
-    if (destX === null || destY === null) return;
-
+    this.lastDodgeAt = time;
     this.energy -= 20;
-    this.dashCd = Math.max(900, 2100 - this.upgrades.flexibleMass * 220);
+    this.invulnerableUntil = time + 320;
 
-    const ghost = this.add.sprite(this.player.x, this.player.y, 'player_pixel').setScale(2).setAlpha(0.55).setTint(0x38bdf8).setDepth(9);
-    this.tweens.add({ targets: ghost, alpha: 0, duration: 260, onComplete: () => ghost.destroy() });
+    let dx = vx;
+    let dy = vy;
+    if (dx === 0 && dy === 0) {
+      const wp = this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y);
+      const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, wp.x, wp.y);
+      dx = Math.cos(angle);
+      dy = Math.sin(angle);
+    } else {
+      const len = Math.hypot(dx, dy);
+      dx /= len;
+      dy /= len;
+    }
 
-    this.player.setPosition(destX, destY);
-    this.showFloatingText(this.player.x, this.player.y - 26, 'PHASE SHIFT', '#38bdf8');
+    const ghost = this.add.circle(this.player.x, this.player.y, 16, 0x2dd4bf, 0.55);
+    this.tweens.add({
+      targets: ghost,
+      alpha: 0,
+      scale: 1.6,
+      duration: 260,
+      onComplete: () => ghost.destroy(),
+    });
+
+    this.player.x = Phaser.Math.Clamp(this.player.x + dx * 155, 70, this.worldWidth - 70);
+    this.player.y = Phaser.Math.Clamp(this.player.y + dy * 155, 70, this.worldHeight - 70);
+    this.pushHud(true);
   }
 
-  private triggerMeltdown() {
-    this.meltdownTimer = 4500 + this.upgrades.isotopeCore * 800;
-    this.cameras.main.flash(220, 249, 115, 22, false);
-    this.cameras.main.shake(180, 0.01);
-    this.showFloatingText(this.player.x, this.player.y - 34, 'NUCLEAR MELTDOWN!', '#fb923c');
+  private tryActivateMeltdown(time: number): void {
+    if (this.meltdownActive || this.heat < 80) return;
+    this.meltdownActive = true;
+    this.meltdownEndsAt = time + 6500;
+    this.meltdownAura.setVisible(true);
+    this.cameras.main.shake(180, 0.005);
+    this.pushHud(true);
   }
 
-  private applyMeltdownAuraDamage(dt: number) {
-    const weaponDamage = this.equipped.WEAPON?.stats.damageBonus ?? 0;
-    const auraDps = 45 + this.upgrades.isotopeCore * 15 + weaponDamage;
+  private applyMeltdownAuraDamage(dt: number): void {
+    const dps = 45 + this.upgrades.isotopeCore * 18;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const enemy = this.enemies[i];
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.sprite.x, enemy.sprite.y);
-      if (dist <= 125) {
-        this.damageEnemy(enemy, auraDps * dt, false);
+      const e = this.enemies[i];
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, e.sprite.x, e.sprite.y) <= 95) {
+        this.damageEnemy(i, dps * dt);
       }
     }
   }
 
-  private updateProjectiles(dt: number) {
+  private updateProjectiles(time: number): void {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      const proj = this.projectiles[i];
-      proj.life -= dt;
-      proj.shape.x += proj.vx * dt;
-      proj.shape.y += proj.vy * dt;
-      proj.glow.setPosition(proj.shape.x, proj.shape.y);
-
-      if (this.isInsideWall(proj.shape.x, proj.shape.y, 5)) {
-        proj.shape.destroy();
-        proj.glow.destroy();
+      const p = this.projectiles[i];
+      if (time >= p.expiresAt) {
+        p.sprite.destroy();
         this.projectiles.splice(i, 1);
         continue;
       }
 
-      let hit = false;
-      for (let j = this.enemies.length - 1; j >= 0; j--) {
-        const enemy = this.enemies[j];
-        const hitRadius = enemy.isBoss ? 44 : enemy.isElite ? 24 : 18;
-        if (Phaser.Math.Distance.Between(proj.shape.x, proj.shape.y, enemy.sprite.x, enemy.sprite.y) <= hitRadius) {
-          this.damageEnemy(enemy, proj.damage, true);
-          hit = true;
+      // Check muurbotsing
+      let hitWall = false;
+      for (const rect of this.wallRects) {
+        if (rect.contains(p.sprite.x, p.sprite.y)) {
+          hitWall = true;
           break;
         }
       }
-
-      if (hit || proj.life <= 0) {
-        proj.shape.destroy();
-        proj.glow.destroy();
+      if (hitWall) {
+        p.sprite.destroy();
         this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      if (p.fromPlayer) {
+        for (let j = this.enemies.length - 1; j >= 0; j--) {
+          const e = this.enemies[j];
+          const hitRadius = e.isBoss ? 28 : 18;
+          if (Phaser.Math.Distance.Between(p.sprite.x, p.sprite.y, e.sprite.x, e.sprite.y) <= hitRadius) {
+            this.energy = Math.min(this.baseMaxEnergy, this.energy + 8);
+            this.heat = Math.min(100, this.heat + 6);
+            this.damageEnemy(j, p.damage);
+            p.sprite.destroy();
+            this.projectiles.splice(i, 1);
+            break;
+          }
+        }
       }
     }
   }
 
-  private updateEnemies(dt: number) {
+  private updateEnemies(time: number): void {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const enemy = this.enemies[i];
-      enemy.hitCooldown = Math.max(0, enemy.hitCooldown - dt);
+      const e = this.enemies[i];
+      const dist = Phaser.Math.Distance.Between(e.sprite.x, e.sprite.y, this.player.x, this.player.y);
+      const aggroRange = e.isBoss ? 520 : 390;
 
-      const distToPlayer = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, this.player.x, this.player.y);
-      const aggroRange = enemy.isBoss ? 560 : 460;
+      if (dist < aggroRange) {
+        const angle = Phaser.Math.Angle.Between(e.sprite.x, e.sprite.y, this.player.x, this.player.y);
+        e.body.setVelocity(Math.cos(angle) * e.speed, Math.sin(angle) * e.speed);
 
-      if (distToPlayer < aggroRange) {
-        const angle = Math.atan2(this.player.y - enemy.sprite.y, this.player.x - enemy.sprite.x);
-        this.moveWithWallSlide(
-          enemy.sprite,
-          Math.cos(angle) * enemy.speed * dt,
-          Math.sin(angle) * enemy.speed * dt,
-          enemy.isBoss ? 36 : enemy.isElite ? 20 : 14
-        );
-        if (Math.cos(angle) < 0) enemy.sprite.setFlipX(true);
-        if (Math.cos(angle) > 0) enemy.sprite.setFlipX(false);
-      }
-
-      const shadowOffsetY = enemy.isBoss ? 38 : enemy.isElite ? 18 : 13;
-      enemy.shadow.setPosition(enemy.sprite.x, enemy.sprite.y + shadowOffsetY);
-
-      const barY = enemy.sprite.y - (enemy.isBoss ? 52 : enemy.isElite ? 28 : 22);
-      enemy.hpBarBg.setPosition(enemy.sprite.x, barY);
-      enemy.hpBarFill.setPosition(enemy.sprite.x - (enemy.hpBarBg.width - enemy.hpBarFill.width) / 2, barY);
-      if (enemy.label) {
-        enemy.label.setPosition(enemy.sprite.x, barY - 14);
-      }
-
-      const meleeRange = enemy.isBoss ? 54 : enemy.isElite ? 34 : 28;
-      if (distToPlayer <= meleeRange && enemy.hitCooldown <= 0) {
-        enemy.hitCooldown = 0.85;
-        this.damagePlayer(enemy.damage);
+        if (dist < (e.isBoss ? 44 : 28) && time - e.lastAttackAt > 950) {
+          e.lastAttackAt = time;
+          if (time >= this.invulnerableUntil) {
+            this.hp = Math.max(0, this.hp - e.damage);
+            this.cameras.main.shake(100, 0.004);
+            if (this.hp <= 0) {
+              // Respawn op start van huidige sector bij dood
+              this.hp = this.getMaxHp();
+              this.player.setPosition(280, 280);
+            }
+          }
+        }
+      } else {
+        e.body.setVelocity(0, 0);
       }
     }
   }
 
-  private damagePlayer(amount: number) {
-    const reductionPct = (this.equipped.ARMOR?.stats.damageReductionPct ?? 0) / 100;
-    const mitigated = Math.max(1, Math.round(amount * (1 - reductionPct)));
+  private damageEnemy(index: number, amount: number): void {
+    const e = this.enemies[index];
+    if (!e) return;
+    e.hp -= amount;
+    const ratio = Math.max(0, e.hp / e.maxHp);
+    e.hpBar.scaleX = ratio;
 
-    this.hp = Math.max(0, this.hp - mitigated);
-    this.cameras.main.shake(90, 0.006);
-    this.showFloatingText(this.player.x, this.player.y - 24, `-${mitigated}`, '#f43f5e');
+    if (e.hp <= 0) {
+      const { x, y } = e.sprite;
+      const wasBoss = e.isBoss;
+      const wasElite = e.isElite;
+      const xpReward = e.xpValue;
 
-    if (this.hp <= 0) {
-      this.hp = this.maxHp;
-      this.energy = this.maxEnergy;
-      this.player.setPosition(POINT_A.x, POINT_A.y);
-      this.showFloatingText(this.player.x, this.player.y - 36, 'CLONE RESTORED AT POINT A', '#34d399');
+      e.sprite.destroy();
+      this.enemies.splice(index, 1);
+      this.grantXp(xpReward);
+
+      // Schaarse loot: 6% normale vijanden, 12% bazen/elites (2x kans)
+      const baseDropChance = 0.06;
+      const dropChance = wasBoss || wasElite ? baseDropChance * 2 : baseDropChance;
+      if (Math.random() < dropChance) {
+        this.spawnLootOrb(x, y, wasBoss);
+      }
+
+      if (wasBoss) {
+        this.unlockExitDoor();
+      }
+      this.pushHud(true);
     }
   }
 
-  private damageEnemy(enemy: EnemyEntity, amount: number, showNumber: boolean) {
-    const rawDamage = enemy.affix === 'ARMORED' || enemy.isBoss ? amount * 0.78 : amount;
-    enemy.hp -= rawDamage;
+  private spawnLootOrb(x: number, y: number, fromBoss: boolean): void {
+    const roll = Math.random();
+    const rarity: ItemRarity = fromBoss
+      ? roll < 0.35
+        ? 'EXOTIC'
+        : 'RARE'
+      : roll < 0.08
+      ? 'EXOTIC'
+      : roll < 0.35
+      ? 'RARE'
+      : 'COMMON';
 
-    const ratio = Math.max(0, enemy.hp / enemy.maxHp);
-    enemy.hpBarFill.width = enemy.hpBarBg.width * ratio;
+    const slots: ItemSlot[] = ['WEAPON', 'ARMOR', 'INJECTOR'];
+    const slot = Phaser.Utils.Array.GetRandom(slots);
+    const mult = rarity === 'EXOTIC' ? 2.4 : rarity === 'RARE' ? 1.6 : 1;
 
-    const displayDmg = Math.round(rawDamage);
-    if (showNumber && displayDmg >= 1) {
-      this.showFloatingText(
-        enemy.sprite.x,
-        enemy.sprite.y - 20,
-        `${displayDmg}`,
-        enemy.isBoss ? '#2dd4bf' : enemy.isElite ? '#fbbf24' : '#e2e8f0'
-      );
+    let item: LootItem;
+    if (slot === 'WEAPON') {
+      const dmg = Math.round(6 * mult);
+      item = {
+        id: `loot-${Date.now()}-${Math.random()}`,
+        name: rarity === 'EXOTIC' ? 'Helios Isotope Cannon' : rarity === 'RARE' ? 'Overcharged Bio-Emitter' : 'Scrap Plasma Emitter',
+        slot,
+        rarity,
+        description: `+${dmg} Bio-Shot Damage`,
+        stats: { damageBonus: dmg },
+      };
+    } else if (slot === 'ARMOR') {
+      const hpBonus = Math.round(30 * mult);
+      item = {
+        id: `loot-${Date.now()}-${Math.random()}`,
+        name: rarity === 'EXOTIC' ? 'Aegis Chitin Exo-Suit' : rarity === 'RARE' ? 'Reinforced Kevlar Weave' : 'Polymer Carapace',
+        slot,
+        rarity,
+        description: `+${hpBonus} Max Vitality (HP)`,
+        stats: { maxHpBonus: hpBonus },
+      };
+    } else {
+      const regen = Math.round(4 * mult);
+      item = {
+        id: `loot-${Date.now()}-${Math.random()}`,
+        name: rarity === 'EXOTIC' ? 'Apex Adrenal Splicer' : rarity === 'RARE' ? 'Catalytic Bio-Injector' : 'Basic Glucose Syringe',
+        slot,
+        rarity,
+        description: `+${regen}/s Bio-Energy Regen`,
+        stats: { energyRegenBonus: regen },
+      };
     }
 
-    if (enemy.hp <= 0) {
-      this.killEnemy(enemy);
-    }
+    const orbColor = rarity === 'EXOTIC' ? 0xf59e0b : rarity === 'RARE' ? 0x38bdf8 : 0x10b981;
+    const outer = this.add.circle(0, 0, 13, orbColor, 0.28);
+    const core = this.add.circle(0, 0, 6, orbColor, 1);
+    const orb = this.add.container(x, y, [outer, core]);
+
+    this.tweens.add({
+      targets: outer,
+      scale: 1.4,
+      alpha: 0.1,
+      yoyo: true,
+      repeat: -1,
+      duration: 600,
+    });
+
+    this.lootDrops.push({ sprite: orb, item });
   }
 
-  private killEnemy(enemy: EnemyEntity) {
-    const idx = this.enemies.indexOf(enemy);
-    if (idx !== -1) this.enemies.splice(idx, 1);
-
-    const lifesteal = this.equipped.INJECTOR?.stats.lifestealOnKill ?? 0;
-    if (lifesteal > 0 && this.hp < this.maxHp) {
-      this.hp = Math.min(this.maxHp, this.hp + lifesteal);
-      this.showFloatingText(this.player.x + 14, this.player.y - 18, `+${lifesteal} HP`, '#34d399');
-    }
-
-    if (enemy.affix === 'VOLATILE') {
-      const blast = this.add.circle(enemy.sprite.x, enemy.sprite.y, 100, 0xf97316, 0.35).setDepth(15);
-      this.tweens.add({ targets: blast, alpha: 0, scale: 1.2, duration: 300, onComplete: () => blast.destroy() });
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.sprite.x, enemy.sprite.y) <= 100) {
-        this.damagePlayer(18);
+  private updateLootPickups(): void {
+    for (let i = this.lootDrops.length - 1; i >= 0; i--) {
+      const drop = this.lootDrops[i];
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, drop.sprite.x, drop.sprite.y) <= 34) {
+        if (this.inventory.length < 12) {
+          this.inventory.push(drop.item);
+          drop.sprite.destroy();
+          this.lootDrops.splice(i, 1);
+          this.pushHud(true);
+        }
       }
     }
-
-    if (enemy.isBoss) {
-      this.spawnLootDrop(enemy.sprite.x - 28, enemy.sprite.y, 'EXOTIC');
-      this.spawnLootDrop(enemy.sprite.x + 28, enemy.sprite.y, 'RARE');
-      this.setPortalState(true);
-      this.cameras.main.flash(200, 45, 212, 191, false);
-      this.showFloatingText(enemy.sprite.x, enemy.sprite.y - 44, 'EXTRACTION PORTAL UNLOCKED!', '#2dd4bf');
-    } else if (enemy.isElite) {
-      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < (isBossOrElite ? 0.06 : 0.06) ? 'EXOTIC' : 'RARE');
-    } else const baseDropChance = 0.06; const dropChance = isBoss ? baseDropChance * 2 : baseDropChance; if (Math.random() < dropChance) {
-      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y);
-    }
-
-    this.grantXp(enemy.xpValue);
-
-    enemy.sprite.destroy();
-    enemy.shadow.destroy();
-    enemy.hpBarBg.destroy();
-    enemy.hpBarFill.destroy();
-    enemy.label?.destroy();
-    this.emitHud();
   }
 
-  private grantXp(amount: number) {
+  private checkExitDoorTransition(): void {
+    if (!this.exitDoorOpen || this.transitioningSector) return;
+    if (this.exitDoorZone.contains(this.player.x, this.player.y)) {
+      this.transitioningSector = true;
+      this.sectorNumber += 1;
+      this.hp = Math.min(this.getMaxHp(), this.hp + 30);
+      this.cameras.main.fadeOut(320, 6, 10, 18);
+      this.time.delayedCall(340, () => {
+        this.buildProceduralSector(false);
+        this.cameras.main.fadeIn(320, 6, 10, 18);
+      });
+    }
+  }
+
+  private grantXp(amount: number): void {
     this.xp += amount;
     while (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
       this.level += 1;
       this.dnaPoints += 1;
       this.xpToNext = Math.round(this.xpToNext * 1.35);
-      this.hp = this.maxHp;
-      this.showFloatingText(this.player.x, this.player.y - 44, `LEVEL UP! +1 DNA POINT`, '#c084fc');
+      this.hp = this.getMaxHp();
     }
   }
 
-  private spawnLinearMazeEnemies() {
-    const scale = 1 + (this.waveNumber - 1) * 0.25;
+  private drawMinimap(): void {
+    if (!this.minimapGraphics) return;
+    this.minimapGraphics.clear();
 
-    // 4 packs placed sequentially along the corridors from Point A to Point B
-    const packs: Array<{ cx: number; cy: number; count: number; affix: 'ARMORED' | 'FAST' | 'VOLATILE' }> = [
-      { cx: 1460, cy: 260, count: 4, affix: 'FAST' },      // Corridor 1 (North)
-      { cx: 1360, cy: 630, count: 5, affix: 'ARMORED' },   // Corridor 2 (Heading West)
-      { cx: 1120, cy: 920, count: 5, affix: 'VOLATILE' },  // Corridor 3 (Heading East)
-      { cx: 1440, cy: 1220, count: 5, affix: 'ARMORED' },  // Corridor 4 (Approach to Boss Gate)
-    ];
+    const mapW = 168;
+    const mapH = 126;
+    const ox = 1120 - mapW - 18;
+    const oy = 18;
+    const sx = mapW / this.worldWidth;
+    const sy = mapH / this.worldHeight;
 
-    for (const pack of packs) {
-      for (let i = 0; i < pack.count; i++) {
-        const isElite = i === 0;
-        const offsetX = isElite ? 0 : ((i % 2 === 0 ? 1 : -1) * 55);
-        const offsetY = isElite ? 0 : (i < 3 ? -42 : 42);
-        let x = pack.cx + offsetX;
-        let y = pack.cy + offsetY;
+    this.minimapGraphics.fillStyle(0x060a12, 0.85);
+    this.minimapGraphics.fillRect(ox, oy, mapW, mapH);
+    this.minimapGraphics.lineStyle(1, 0x334155, 1);
+    this.minimapGraphics.strokeRect(ox, oy, mapW, mapH);
 
-        if (this.isInsideWall(x, y, 22)) {
-          x = pack.cx;
-          y = pack.cy;
-        }
-
-        this.createEnemyEntity(x, y, isElite, false, isElite ? pack.affix : undefined, scale);
-      }
+    // Muren op minimap
+    this.minimapGraphics.fillStyle(0x475569, 0.9);
+    for (const r of this.wallRects) {
+      this.minimapGraphics.fillRect(ox + r.x * sx, oy + r.y * sy, Math.max(2, r.width * sx), Math.max(2, r.height * sy));
     }
 
-    // Sector Warden guarding Point B in the South-East Boss Chamber
-    this.createEnemyEntity(2260, 1740, true, true, 'TITAN', scale);
-  }
-
-  private createEnemyEntity(
-    x: number,
-    y: number,
-    isElite: boolean,
-    isBoss: boolean,
-    affix: 'ARMORED' | 'FAST' | 'VOLATILE' | 'TITAN' | undefined,
-    scale: number
-  ) {
-    const texture = isBoss ? 'boss_warden' : isElite ? 'enemy_elite' : 'enemy_minion';
-    const spriteScale = isBoss ? 3.2 : isElite ? 2.1 : 1.9;
-
-    const shadow = this.add
-      .ellipse(x, y + (isBoss ? 38 : 15), isBoss ? 86 : isElite ? 34 : 24, isBoss ? 28 : 10, 0x020617, 0.7)
-      .setDepth(8);
-
-    if (isBoss) {
-      const bossSpot = this.add.circle(x, y, 130, 0x2dd4bf, 0.14).setDepth(3);
-      this.tweens.add({ targets: bossSpot, alpha: 0.06, duration: 1500, yoyo: true, repeat: -1 });
-      this.events.on('update', () => {
-        if (bossSpot.active && sprite.active) {
-          bossSpot.setPosition(sprite.x, sprite.y);
-        } else if (bossSpot.active) {
-          bossSpot.destroy();
-        }
-      });
+    // Vijanden & Boss
+    for (const e of this.enemies) {
+      this.minimapGraphics.fillStyle(e.isBoss ? 0xfacc15 : 0xf43f5e, 1);
+      this.minimapGraphics.fillCircle(ox + e.sprite.x * sx, oy + e.sprite.y * sy, e.isBoss ? 4 : 2);
     }
 
-    const sprite = this.add.sprite(x, y, texture).setScale(spriteScale).setDepth(10);
+    // Deur bij Point B (rood = dicht, groen = open)
+    this.minimapGraphics.fillStyle(this.exitDoorOpen ? 0x10b981 : 0xef4444, 1);
+    this.minimapGraphics.fillRect(ox + 2520 * sx - 4, oy + 1860 * sy - 4, 8, 8);
 
-    const barW = isBoss ? 96 : isElite ? 48 : 30;
-    const hpBarBg = this.add.rectangle(x, y - 24, barW, 5, 0x0f172a).setDepth(15);
-    const hpBarFill = this.add
-      .rectangle(x, y - 24, barW, 5, isBoss ? 0x2dd4bf : isElite ? 0xfbbf24 : 0xf43f5e)
-      .setDepth(16);
-
-    const label = isElite
-      ? this.add
-          .text(x, y - 38, isBoss ? '☠ SECTOR WARDEN [TITAN]' : `★ ${affix}`, {
-            fontSize: isBoss ? '13px' : '11px',
-            color: isBoss ? '#5eead4' : '#fde047',
-            fontStyle: 'bold',
-            fontFamily: 'monospace',
-          })
-          .setOrigin(0.5)
-          .setDepth(17)
-      : undefined;
-
-    const baseHp = isBoss ? 850 : isElite ? 220 : 68;
-    const maxHp = Math.round(baseHp * scale);
-
-    this.enemies.push({
-      id: this.nextEnemyId++,
-      sprite,
-      shadow,
-      hpBarBg,
-      hpBarFill,
-      label,
-      hp: maxHp,
-      maxHp,
-      speed: isBoss ? 88 : affix === 'FAST' ? 172 : isElite ? 108 : 136,
-      damage: Math.round((isBoss ? 28 : isElite ? 18 : 9) * scale),
-      xpValue: isBoss ? 220 : isElite ? 65 : 22,
-      isElite,
-      isBoss,
-      affix,
-      hitCooldown: 0,
-    });
+    // Speler
+    this.minimapGraphics.fillStyle(0x38bdf8, 1);
+    this.minimapGraphics.fillCircle(ox + this.player.x * sx, oy + this.player.y * sy, 3);
   }
 
-  private showFloatingText(x: number, y: number, text: string, color: string) {
-    const label = this.add
-      .text(x, y, text, {
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color,
-        fontFamily: 'monospace',
-      })
-      .setOrigin(0.5)
-      .setDepth(40);
+  private pushHud(force: boolean): void {
+    if (!this.hudCallback && !force) return;
+    const now = this.time?.now ?? 0;
+    const slamCd = Math.max(0, Number(((3200 - (now - this.lastSlamAt)) / 1000).toFixed(1)));
+    const dodgeCdTotal = Math.max(950, 2200 - this.upgrades.flexibleMass * 220);
+    const dodgeCd = Math.max(0, Number(((dodgeCdTotal - (now - this.lastDodgeAt)) / 1000).toFixed(1)));
 
-    this.tweens.add({
-      targets: label,
-      y: y - 30,
-      alpha: 0,
-      duration: 650,
-      onComplete: () => label.destroy(),
-    });
-  }
-
-  private emitHud() {
-    if (!this.onHudUpdate) return;
-    this.onHudUpdate({
+    this.hudCallback?.({
       hp: Math.round(this.hp),
-      maxHp: this.maxHp,
+      maxHp: this.getMaxHp(),
       energy: Math.round(this.energy),
-      maxEnergy: this.maxEnergy,
+      maxEnergy: this.baseMaxEnergy,
       heat: Math.round(this.heat),
-      meltdownActive: this.meltdownTimer > 0,
+      meltdownActive: this.meltdownActive,
       xp: this.xp,
       xpToNext: this.xpToNext,
       level: this.level,
       dnaPoints: this.dnaPoints,
-      packNumber: this.waveNumber,
+      packNumber: this.sectorNumber,
       enemiesRemaining: this.enemies.length,
-      cooldowns: {
-        slam: Number((this.slamCd / 1000).toFixed(1)),
-        dash: Number((this.dashCd / 1000).toFixed(1)),
-      },
+      cooldowns: { slam: slamCd, dash: dodgeCd },
       upgrades: { ...this.upgrades },
       equipped: { ...this.equipped },
       inventory: [...this.inventory],
     });
   }
 }
-
-export const HudSnapshot = null as unknown as HudSnapshot;
-export const SomaticUpgrades = null as unknown as SomaticUpgrades;
