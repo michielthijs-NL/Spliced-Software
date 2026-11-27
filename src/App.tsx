@@ -337,7 +337,6 @@ export default function App() {
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       onClick={() => {
-                        setShowDungeonSelect(false);
                         setActiveModal('inventory');
                       }}
                       style={{
@@ -355,7 +354,6 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => {
-                        setShowDungeonSelect(false);
                         setActiveModal('levelup');
                       }}
                       style={{
@@ -618,7 +616,7 @@ export default function App() {
           )}
 
           {/* [I] INVENTORY & GEAR MODAL */}
-          {!showDungeonSelect && activeModal === 'inventory' && (
+          {activeModal === 'inventory' && (
             <div
               style={{
                 position: 'absolute',
@@ -630,7 +628,7 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 25,
+                zIndex: 50,
               }}
             >
               <div
@@ -806,7 +804,7 @@ export default function App() {
           )}
 
           {/* [J] LEVEL-UP & DNA MUTATIONS MODAL */}
-          {!showDungeonSelect && activeModal === 'levelup' && (
+          {activeModal === 'levelup' && (
             <div
               style={{
                 position: 'absolute',
@@ -818,7 +816,7 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 25,
+                zIndex: 50,
               }}
             >
               <div
