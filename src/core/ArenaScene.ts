@@ -16,32 +16,10 @@ export type SupportGemId =
   | 'vampiricSiphon'
   | 'volatileCatalyst';
 
-export const ALL_SUPPORT_GEM_IDS: SupportGemId[] = [
-  'scatterSplit',
-  'highVelocity',
-  'magnifiedArea',
-  'seismicEcho',
-  'brutalOvercharge',
-  'essenceEfficiency',
-  'vampiricSiphon',
-  'volatileCatalyst',
-];
-
-export const GEM_DISPLAY_NAMES: Record<SupportGemId, string> = {
-  scatterSplit: 'Scatter Split',
-  highVelocity: 'High-Velocity Reach',
-  magnifiedArea: 'Magnified Area',
-  seismicEcho: 'Seismic Echo',
-  brutalOvercharge: 'Brutal Overcharge',
-  essenceEfficiency: 'Essence Efficiency',
-  vampiricSiphon: 'Vampiric Siphon',
-  volatileCatalyst: 'Volatile Catalyst',
-};
-
 export interface SkillTree {
   unlocked: Record<SkillKey, boolean>;
   sockets: Record<SkillKey, SupportGemId[]>;
-  ownedGems: SupportGemId[];
+  uncutGems: number;
 }
 
 export interface LootItem {
@@ -182,7 +160,7 @@ export interface HudSnapshot {
   inventory: LootItem[];
   runOutcome: RunOutcome;
   bossRewardItem: LootItem | null;
-  bossRewardGem: SupportGemId | null;
+  bossRewardGemsCount: number;
   dungeonStats: {
     kills: number;
     bossDefeated: boolean;
@@ -218,7 +196,6 @@ interface GroundDropData {
   sprite: Phaser.GameObjects.Container;
   kind: 'GEAR' | 'GEM';
   item?: LootItem;
-  gemId?: SupportGemId;
 }
 
 export class ArenaScene extends Phaser.Scene {
@@ -263,11 +240,11 @@ export class ArenaScene extends Phaser.Scene {
   private worldTier = 1;
   private activeDungeon: DungeonDef = DUNGEONS[0];
 
-  // Start op Level 1 zonder gevonden Support Gems; deze vind je als drops op de grond
+  // Universele Uncut Gems: elke gevonden gem kan elke support skill worden
   private skills: SkillTree = {
     unlocked: { bioShot: true, phaseDodge: true, coneSlam: false, meltdownUlt: false },
     sockets: { bioShot: [], phaseDodge: [], coneSlam: [], meltdownUlt: [] },
-    ownedGems: [],
+    uncutGems: 0,
   };
 
   private equipped: Record<ItemSlot, LootItem | null> = {
@@ -279,7 +256,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private runOutcome: RunOutcome = 'PLAYING';
   private bossRewardItem: LootItem | null = null;
-  private bossRewardGem: SupportGemId | null = null;
+  private bossRewardGemsCount = 0;
   private dungeonStats = {
     kills: 0,
     bossDefeated: false,
@@ -330,7 +307,7 @@ export class ArenaScene extends Phaser.Scene {
     this.activeDungeon = chosen;
     this.runOutcome = 'PLAYING';
     this.bossRewardItem = null;
-    this.bossRewardGem = null;
+    this.bossRewardGemsCount = 0;
     this.hp = this.getMaxHp();
     this.energy = this.baseMaxEnergy;
     this.heat = 0;
@@ -361,9 +338,10 @@ export class ArenaScene extends Phaser.Scene {
     this.pushHud(true);
   }
 
-  public socketSupport(skill: SkillKey, gem: SupportGemId): void {
+  // Gebruik 1 Uncut Gem om hem om te vormen tot een gekozen Support Skill
+  public carveGemIntoSocket(skill: SkillKey, gem: SupportGemId): void {
     if (!this.skills.unlocked[skill]) return;
-    if (!this.skills.ownedGems.includes(gem)) return;
+    if (this.skills.uncutGems <= 0) return;
 
     const maxSockets = this.getMaxSocketsForLevel();
     if (this.skills.sockets[skill].length >= maxSockets) return;
@@ -371,6 +349,7 @@ export class ArenaScene extends Phaser.Scene {
     const usedAnywhere = Object.values(this.skills.sockets).some((list) => list.includes(gem));
     if (usedAnywhere) return;
 
+    this.skills.uncutGems -= 1;
     this.skills.sockets[skill].push(gem);
     this.pushHud(true);
   }
@@ -591,7 +570,7 @@ export class ArenaScene extends Phaser.Scene {
       .text(
         18,
         648,
-        'WASD: Bewegen | LMB: Bio-Shot | RMB: Cone-Slam | SPATIE: Dodge | E: Meltdown | [K] Support Sockets',
+        'WASD: Bewegen | LMB: Bio-Shot | RMB: Cone-Slam | SPATIE: Dodge | E: Meltdown | [K] Uncut Gems Vormen',
         {
           fontFamily: 'monospace',
           fontSize: '12px',
@@ -1117,12 +1096,12 @@ export class ArenaScene extends Phaser.Scene {
       this.dungeonStats.xpEarned += xpReward;
       this.grantXp(xpReward);
 
-      // Schaarse loot drops: Gear (6% mob / 12% boss) & Support Gems (5% mob / 10% boss)
+      // Schaarse loot drops: Gear (6% mob / 12% boss) & Universele Uncut Gems (5% mob / 10% boss)
       const gearChance = wasBoss || wasElite ? 0.12 : 0.06;
       const gemChance = wasBoss || wasElite ? 0.10 : 0.05;
 
-      if (Math.random() < gemChance && this.pickUnownedSupportGem()) {
-        this.spawnSupportGemOrb(x + 12, y);
+      if (Math.random() < gemChance) {
+        this.spawnUncutGemOrb(x + 12, y);
       } else if (Math.random() < gearChance) {
         this.spawnLootOrb(x, y, wasBoss);
       }
@@ -1134,20 +1113,11 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private pickUnownedSupportGem(): SupportGemId | null {
-    const remaining = ALL_SUPPORT_GEM_IDS.filter((id) => !this.skills.ownedGems.includes(id));
-    if (remaining.length === 0) return null;
-    return Phaser.Utils.Array.GetRandom(remaining);
-  }
-
-  private spawnSupportGemOrb(x: number, y: number): void {
-    const gemId = this.pickUnownedSupportGem();
-    if (!gemId) return;
-
+  private spawnUncutGemOrb(x: number, y: number): void {
     const outer = this.add.circle(0, 0, 15, 0xa855f7, 0.34);
     const diamond = this.add.rectangle(0, 0, 11, 11, 0xe879f9).setRotation(Math.PI / 4).setStrokeStyle(1.5, 0xffffff);
     const label = this.add
-      .text(0, -22, 'GEM', {
+      .text(0, -22, 'UNCUT GEM', {
         fontFamily: 'monospace',
         fontSize: '9px',
         fontStyle: 'bold',
@@ -1165,7 +1135,7 @@ export class ArenaScene extends Phaser.Scene {
       duration: 550,
     });
 
-    this.groundDrops.push({ sprite: orb, kind: 'GEM', gemId });
+    this.groundDrops.push({ sprite: orb, kind: 'GEM' });
   }
 
   private createLootItem(fromBoss: boolean): LootItem {
@@ -1241,13 +1211,11 @@ export class ArenaScene extends Phaser.Scene {
     for (let i = this.groundDrops.length - 1; i >= 0; i--) {
       const drop = this.groundDrops[i];
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, drop.sprite.x, drop.sprite.y) <= 36) {
-        if (drop.kind === 'GEM' && drop.gemId) {
-          if (!this.skills.ownedGems.includes(drop.gemId)) {
-            this.skills.ownedGems.push(drop.gemId);
-          }
+        if (drop.kind === 'GEM') {
+          this.skills.uncutGems += 1;
           this.dungeonStats.gemsFound += 1;
           const popup = this.add
-            .text(this.player.x, this.player.y - 34, `+ SUPPORT GEM: ${GEM_DISPLAY_NAMES[drop.gemId].toUpperCase()}`, {
+            .text(this.player.x, this.player.y - 34, '+1 UNCUT SUPPORT GEM (VORM IN [K])', {
               fontFamily: 'monospace',
               fontSize: '12px',
               fontStyle: 'bold',
@@ -1294,7 +1262,7 @@ export class ArenaScene extends Phaser.Scene {
       this.dungeonStats.xpEarned += completionXp;
       this.grantXp(completionXp);
 
-      // Gegarandeerde Boss Chest Gear + Support Gem (indien nog niet allemaal gevonden)
+      // Gegarandeerde Boss Chest Gear + 1 Uncut Support Gem
       const reward = this.createLootItem(true);
       this.bossRewardItem = reward;
       if (this.inventory.length < 12) {
@@ -1302,12 +1270,9 @@ export class ArenaScene extends Phaser.Scene {
         this.dungeonStats.lootFound += 1;
       }
 
-      const newGem = this.pickUnownedSupportGem();
-      if (newGem) {
-        this.skills.ownedGems.push(newGem);
-        this.bossRewardGem = newGem;
-        this.dungeonStats.gemsFound += 1;
-      }
+      this.skills.uncutGems += 1;
+      this.bossRewardGemsCount = 1;
+      this.dungeonStats.gemsFound += 1;
 
       this.pushHud(true);
     }
@@ -1357,7 +1322,6 @@ export class ArenaScene extends Phaser.Scene {
       this.minimapGraphics.fillCircle(ox + e.sprite.x * sx, oy + e.sprite.y * sy, e.isBoss ? 4 : 2);
     }
 
-    // Support Gem drops op de minimap tonen als paarse stip
     for (const d of this.groundDrops) {
       if (d.kind === 'GEM') {
         this.minimapGraphics.fillStyle(0xe879f9, 1);
@@ -1386,6 +1350,7 @@ export class ArenaScene extends Phaser.Scene {
       xpToNext: this.xpToNext,
       level: this.level,
       maxLevel: this.maxLevel,
+      maxSocketsPerSkill: this.getMaxSocketsForLevel(),
       dnaPoints: this.dnaPoints,
       activeDungeon: this.activeDungeon,
       dungeonsClearedTotal: this.dungeonsClearedTotal,
@@ -1401,13 +1366,13 @@ export class ArenaScene extends Phaser.Scene {
           coneSlam: [...this.skills.sockets.coneSlam],
           meltdownUlt: [...this.skills.sockets.meltdownUlt],
         },
-        ownedGems: [...this.skills.ownedGems],
+        uncutGems: this.skills.uncutGems,
       },
       equipped: { ...this.equipped },
       inventory: [...this.inventory],
       runOutcome: this.runOutcome,
       bossRewardItem: this.bossRewardItem,
-      bossRewardGem: this.bossRewardGem,
+      bossRewardGemsCount: this.bossRewardGemsCount,
       dungeonStats: { ...this.dungeonStats },
     });
   }
