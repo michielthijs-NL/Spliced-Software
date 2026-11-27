@@ -1,0 +1,50 @@
+.shell {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 28px 16px 40px;
+  box-sizing: border-box;
+}
+
+.shell-header {
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9dff4a;
+}
+
+.shell-header h1 {
+  margin: 0;
+  font-size: 40px;
+  letter-spacing: -0.04em;
+  color: #f2f4f8;
+}
+
+.lede {
+  margin: 8px 0 0;
+  color: #9aa3b5;
+  font-size: 15px;
+}
+
+.arena-host {
+  width: 800px;
+  max-width: 100%;
+  height: 600px;
+  border: 1px solid #2c3140;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  background: #12141a;
+}
+
+.arena-host canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}

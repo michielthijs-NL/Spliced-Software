@@ -1,0 +1,22 @@
+:root {
+  --mono: ui-monospace, Consolas, monospace;
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font: 18px/145% var(--sans);
+  color: #d5dbe8;
+  background: #0e1016;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+h1 {
+  font-weight: 560;
+}
