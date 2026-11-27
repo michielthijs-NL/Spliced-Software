@@ -46,10 +46,10 @@ const rarityStyles: Record<ItemRarity, { border: string; badge: string; text: st
   },
 };
 
-const slotLabels: Record<ItemSlot, string> = {
-  WEAPON: 'Bio-Emitter',
-  ARMOR: 'Carapace',
-  INJECTOR: 'Splicer Injector',
+const slotMeta: Record<ItemSlot, { label: string; icon: string }> = {
+  WEAPON: { label: 'Bio-Emitter', icon: '\u2694\uFE0F' },
+  ARMOR: { label: 'Carapace', icon: '\uD83D\uDEE1\uFE0F' },
+  INJECTOR: { label: 'Splicer Injector', icon: '\uD83D\uDC89' },
 };
 
 export default function App() {
@@ -200,7 +200,10 @@ export default function App() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-slate-400">{slotLabels[slot]}</span>
+                        <span className="text-[10px] font-mono uppercase text-slate-400 flex items-center gap-1.5">
+                          <span>{slotMeta[slot].icon}</span>
+                          <span>{slotMeta[slot].label}</span>
+                        </span>
                         {item && (
                           <span className={`text-[10px] px-1.5 rounded font-bold ${rarityStyles[item.rarity].badge}`}>
                             {item.rarity}
