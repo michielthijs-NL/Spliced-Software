@@ -357,7 +357,7 @@ export class ArenaScene extends Phaser.Scene {
       .text(
         offsetX + 18,
         offsetY + viewH * invZoom - 28,
-        'WASD: Bewegen | LMB: Bio-Shot | RMB: Stretch-Slam | Q: Phase Dash | SPACE: Meltdown | Versla Warden voor Portal B',
+        'WASD: Bewegen | LMB: Bio-Shot | RMB: Stretch-Slam | SPATIE: Phase Dodge | E: Meltdown Ult | Versla Warden voor Portal B',
         {
           fontSize: '13px',
           color: '#64748b',
@@ -643,7 +643,7 @@ export class ArenaScene extends Phaser.Scene {
       if (w.w <= 120 && w.h <= 180 && w.x > 100) {
         wallGraphics.fillStyle(0xef4444, 1);
         wallGraphics.fillRect(w.x + w.w / 2 - 4, w.y + w.h - faceHeight + 5, 8, 5);
-        this.add.circle(w.x + w.w / 2, w.y + w.h - 8, 28, 0xef4444, 0.12).setDepth(4);
+        this.add.circle(w.x + w.w / 2, w.y + w.h - 8, 28, 0xef4444, 0.06).setDepth(4);
       }
     }
   }
@@ -1167,8 +1167,8 @@ export class ArenaScene extends Phaser.Scene {
       this.cameras.main.flash(200, 45, 212, 191, false);
       this.showFloatingText(enemy.sprite.x, enemy.sprite.y - 44, 'EXTRACTION PORTAL UNLOCKED!', '#2dd4bf');
     } else if (enemy.isElite) {
-      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < (isBossOrElite ? 0.24 : 0.12) ? 'EXOTIC' : 'RARE');
-    } else const baseDropChance = 0.12; const dropChance = isBoss ? baseDropChance * 2 : baseDropChance; if (Math.random() < dropChance) {
+      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < (isBossOrElite ? 0.06 : 0.06) ? 'EXOTIC' : 'RARE');
+    } else const baseDropChance = 0.06; const dropChance = isBoss ? baseDropChance * 2 : baseDropChance; if (Math.random() < dropChance) {
       this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y);
     }
 

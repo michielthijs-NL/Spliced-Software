@@ -231,7 +231,7 @@ export default function App() {
                   <div>
                     <span style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8' }}>SOMATIC GEAR &amp; RUGZAK</span>
                     <span style={{ marginLeft: 12, fontSize: 12, color: '#94a3b8' }}>
-                      Schaarse Loot (12% mob / 24% boss)
+                      Schaarse Loot (6% mob / 12% boss)
                     </span>
                   </div>
                   <button
@@ -315,7 +315,7 @@ export default function App() {
                           color: '#64748b',
                         }}
                       >
-                        Rugzak is leeg. Loot is schaars: gewone vijanden hebben 12% dropkans, bazen 24%.
+                        Rugzak is leeg. Loot is schaars: gewone vijanden hebben 6% dropkans, bazen 12%.
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 280, overflowY: 'auto' }}>
