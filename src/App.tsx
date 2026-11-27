@@ -3,7 +3,6 @@ import Phaser from 'phaser';
 import {
   ArenaScene,
   DUNGEONS,
-  GEM_DISPLAY_NAMES,
   type HudSnapshot,
   type SkillKey,
   type SupportGemId,
@@ -34,13 +33,13 @@ const initialHud: HudSnapshot = {
   skills: {
     unlocked: { bioShot: true, phaseDodge: true, coneSlam: false, meltdownUlt: false },
     sockets: { bioShot: [], phaseDodge: [], coneSlam: [], meltdownUlt: [] },
-    ownedGems: [],
+    uncutGems: 0,
   },
   equipped: { WEAPON: null, ARMOR: null, INJECTOR: null },
   inventory: [],
   runOutcome: 'PLAYING',
   bossRewardItem: null,
-  bossRewardGem: null,
+  bossRewardGemsCount: 0,
   dungeonStats: { kills: 0, bossDefeated: false, xpEarned: 0, lootFound: 0, gemsFound: 0 },
 };
 
@@ -279,7 +278,7 @@ export default function App() {
   };
 
   const handleUnlockSkill = (skill: SkillKey) => sceneRef.current?.unlockSkill(skill);
-  const handleSocketSupport = (skill: SkillKey, gem: SupportGemId) => sceneRef.current?.socketSupport(skill, gem);
+  const handleCarveGem = (skill: SkillKey, gem: SupportGemId) => sceneRef.current?.carveGemIntoSocket(skill, gem);
   const handleEquip = (itemId: string) => sceneRef.current?.equipItem(itemId);
   const handleSalvage = (itemId: string) => sceneRef.current?.salvageItem(itemId);
 
@@ -294,9 +293,7 @@ export default function App() {
   const allLiberated = hud.liberatedZones.length >= DUNGEONS.length;
 
   const socketReqLevels = [1, 10, 20];
-  const unequippedGemsCount = hud.skills.ownedGems.filter(
-    (gId) => !Object.values(hud.skills.sockets).some((list) => list.includes(gId))
-  ).length;
+  const uncutCount = hud.skills.uncutGems;
 
   return (
     <div
@@ -371,13 +368,9 @@ export default function App() {
               }}
               style={{
                 backgroundColor:
-                  hud.dnaPoints > 0 || unequippedGemsCount > 0
-                    ? '#0f766e'
-                    : activeModal === 'skills'
-                    ? '#115e59'
-                    : '#0f172a',
+                  hud.dnaPoints > 0 || uncutCount > 0 ? '#0f766e' : activeModal === 'skills' ? '#115e59' : '#0f172a',
                 border: `1px solid ${
-                  hud.dnaPoints > 0 || unequippedGemsCount > 0 || activeModal === 'skills' ? '#2dd4bf' : '#334155'
+                  hud.dnaPoints > 0 || uncutCount > 0 || activeModal === 'skills' ? '#2dd4bf' : '#334155'
                 }`,
                 color: '#f8fafc',
                 borderRadius: 10,
@@ -405,7 +398,7 @@ export default function App() {
                   +{hud.dnaPoints} DNA
                 </span>
               )}
-              {unequippedGemsCount > 0 && (
+              {uncutCount > 0 && (
                 <span
                   style={{
                     backgroundColor: '#e879f9',
@@ -416,7 +409,7 @@ export default function App() {
                     fontWeight: 800,
                   }}
                 >
-                  +{unequippedGemsCount} GEM
+                  {uncutCount} UNCUT GEM
                 </span>
               )}
             </button>
@@ -652,7 +645,8 @@ export default function App() {
                       </div>
                       <div style={{ fontSize: 13, color: '#f1f5f9', marginTop: 4 }}>
                         Versla eindbaas <strong style={{ color: '#fbbf24' }}>{selectedDungeon.bossName}</strong>, verzamel
-                        zeldzame <strong>Support Gems</strong> van verslagen vijanden en neem deze regio in.
+                        zeldzame <strong>Uncut Support Gems</strong> op de grond en vorm ze om in{' '}
+                        <strong>[K] DNA Skills</strong>.
                       </div>
                     </div>
 
@@ -685,7 +679,7 @@ export default function App() {
                           SOCKET CAPACITEIT (LVL {hud.level}/{hud.maxLevel})
                         </div>
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff', marginTop: 3 }}>
-                          Max {hud.maxSocketsPerSkill} / 3 Sockets &bull; {hud.skills.ownedGems.length}/8 Gems
+                          Max {hud.maxSocketsPerSkill} / 3 Sockets &bull; {uncutCount} Uncut Gems
                         </div>
                       </div>
                     </div>
@@ -758,7 +752,7 @@ export default function App() {
                             cursor: 'pointer',
                           }}
                         >
-                          DNA Skills [K] {unequippedGemsCount > 0 ? `(+${unequippedGemsCount} Gem)` : ''}
+                          DNA Skills [K] {uncutCount > 0 ? `(${uncutCount} Gems)` : ''}
                         </button>
                       </div>
 
@@ -840,8 +834,8 @@ export default function App() {
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{hud.dungeonStats.lootFound}</div>
                   </div>
                   <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 9 }}>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>GEMS</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#e879f9' }}>{hud.dungeonStats.gemsFound}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>UNCUT GEMS</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#e879f9' }}>+{hud.dungeonStats.gemsFound}</div>
                   </div>
                 </div>
 
@@ -864,7 +858,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {hud.bossRewardGem && (
+                  {hud.bossRewardGemsCount > 0 && (
                     <div
                       style={{
                         border: '1px solid #e879f9',
@@ -874,10 +868,10 @@ export default function App() {
                       }}
                     >
                       <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#f0abfc', fontWeight: 700 }}>
-                        NIEUWE SUPPORT GEM ONTDEKT (PLAATS IN [K])
+                        BOSS CHEST GEM BELONING (VORM ZELF IN [K])
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: '#ffffff' }}>
-                        {GEM_DISPLAY_NAMES[hud.bossRewardGem]}
+                        +{hud.bossRewardGemsCount} Uncut Support Gem (Totaal op zak: {uncutCount})
                       </div>
                     </div>
                   )}
@@ -955,7 +949,7 @@ export default function App() {
                   VERSLAGEN IN {hud.activeDungeon.name.toUpperCase()}
                 </h2>
                 <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
-                  Je behoudt je <strong>Level {hud.level}</strong>, al je <strong>gevonden Support Gems</strong>, je{' '}
+                  Je behoudt je <strong>Level {hud.level}</strong>, al je <strong>gevonden Uncut Gems</strong>, je{' '}
                   <strong>ingenomen zones</strong> en je <strong>gear</strong>!
                 </p>
 
@@ -1014,7 +1008,7 @@ export default function App() {
             </div>
           )}
 
-          {/* [K] POE2-STIJL DNA SKILL HELIX & LEVEL-RESTRICTED SOCKET SUBMENU */}
+          {/* [K] POE2-STIJL UNCUT GEM & LEVEL-RESTRICTED SOCKET SUBMENU */}
           {activeModal === 'skills' && (
             <div
               style={{
@@ -1056,13 +1050,13 @@ export default function App() {
                       {selectedSkillKey
                         ? `SKILL SOCKETS // ${HELIX_SKILLS.find((s) => s.key === selectedSkillKey)?.baseName.toUpperCase()} (${
                             hud.maxSocketsPerSkill
-                          }/3 SLOTS BESCHIKBAAR OP LVL ${hud.level})`
+                          }/3 SLOTS OP LVL ${hud.level})`
                         : `GENETIC SKILL HELIX • LEVEL ${hud.level} / ${hud.maxLevel}`}
                     </div>
                     <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 2 }}>
                       DNA Punten (skills ontgrendelen): <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull;
-                      Sockets per skill: <strong>Lvl 1: 1</strong> | <strong>Lvl 10: 2</strong> |{' '}
-                      <strong>Lvl 20: 3</strong> &bull; Gems gevonden: <strong>{hud.skills.ownedGems.length}/8</strong>
+                      Uncut Gems op zak: <strong style={{ color: '#e879f9' }}>{uncutCount}</strong> (vorm 1 Uncut Gem tot elke
+                      gekozen Support Skill)
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -1105,7 +1099,7 @@ export default function App() {
                 </div>
 
                 {!selectedSkillKey ? (
-                  /* HOOFDSCHERM: DE 4 SKILLS OP DE DNA-HELIX MET LEVEL-LOCKED SOCKETS */
+                  /* HOOFDSCHERM: DE 4 SKILLS OP DE DNA-HELIX */
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 14, alignItems: 'center' }}>
                     {(['LEFT', 'RIGHT'] as const).map((side, colIdx) => (
                       <div
@@ -1290,7 +1284,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  /* SUBMENU VAN DE GEKOZEN SKILL: 3 LEVEL-GATED SOCKETS + GEVONDEN SUPPORT GEMS */
+                  /* SUBMENU VAN DE GEKOZEN SKILL: VORM 1 UNCUT GEM OM TOT ELKE GEKOZEN SUPPORT SKILL */
                   (() => {
                     const currentSockets = hud.skills.sockets[selectedSkillKey];
                     const compatibleGems = SUPPORT_GEMS.filter((g) => g.compatible.includes(selectedSkillKey));
@@ -1334,7 +1328,7 @@ export default function App() {
                                   </>
                                 ) : (
                                   <div style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginTop: 6 }}>
-                                    Lege socket &mdash; plaats hieronder een gevonden Support Gem
+                                    Lege socket &mdash; vorm hieronder 1 Uncut Gem om
                                   </div>
                                 )}
                               </div>
@@ -1343,27 +1337,27 @@ export default function App() {
                         </div>
 
                         <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8', marginBottom: 8 }}>
-                          COMPATIBELE SUPPORT GEMS (VIND ZE ALS ZELDZAME DROPS OP DE GROND &bull; UNIEK PER SKILL)
+                          KIES EEN SUPPORT SKILL VOOR JE UNCUT GEM ({uncutCount} OP ZAK &bull; ELKE KEUZE IS UNIEK PER SKILL)
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxHeight: 250, overflowY: 'auto' }}>
                           {compatibleGems.map((gem) => {
-                            const isOwned = hud.skills.ownedGems.includes(gem.id);
                             const usedBySkillKey = (Object.keys(hud.skills.sockets) as SkillKey[]).find((k) =>
                               hud.skills.sockets[k].includes(gem.id)
                             );
                             const usedBySkill = HELIX_SKILLS.find((s) => s.key === usedBySkillKey);
                             const isAtLevelLimit = currentSockets.length >= hud.maxSocketsPerSkill;
-                            const disabled = !isOwned || Boolean(usedBySkill) || isAtLevelLimit;
+                            const hasGemToSpend = uncutCount > 0;
+                            const disabled = !hasGemToSpend || Boolean(usedBySkill) || isAtLevelLimit;
 
                             return (
                               <div
                                 key={gem.id}
                                 style={{
-                                  border: `1px solid ${!isOwned || usedBySkill ? '#1e293b' : gem.color + '66'}`,
-                                  backgroundColor: !isOwned || usedBySkill ? '#060a12' : '#090d16',
+                                  border: `1px solid ${usedBySkill ? '#1e293b' : gem.color + '66'}`,
+                                  backgroundColor: usedBySkill ? '#060a12' : '#090d16',
                                   borderRadius: 9,
                                   padding: 10,
-                                  opacity: !isOwned || usedBySkill ? 0.5 : 1,
+                                  opacity: usedBySkill ? 0.5 : 1,
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
@@ -1371,20 +1365,16 @@ export default function App() {
                                 }}
                               >
                                 <div>
-                                  <div style={{ fontSize: 10, fontFamily: 'monospace', color: isOwned ? gem.color : '#64748b' }}>
-                                    {gem.tag} {!isOwned ? '• NOG NIET GEVONDEN' : ''}
-                                  </div>
-                                  <div style={{ fontSize: 13, fontWeight: 800, color: isOwned ? '#ffffff' : '#94a3b8' }}>
-                                    {gem.name}
-                                  </div>
+                                  <div style={{ fontSize: 10, fontFamily: 'monospace', color: gem.color }}>{gem.tag}</div>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff' }}>{gem.name}</div>
                                   <div style={{ fontSize: 11, color: '#cbd5e1' }}>{gem.desc}</div>
                                 </div>
                                 <button
-                                  onClick={() => handleSocketSupport(selectedSkillKey, gem.id)}
+                                  onClick={() => handleCarveGem(selectedSkillKey, gem.id)}
                                   disabled={disabled}
                                   style={{
-                                    backgroundColor: !isOwned || usedBySkill ? '#1e293b' : gem.color,
-                                    color: !isOwned || usedBySkill ? '#94a3b8' : '#060a12',
+                                    backgroundColor: disabled ? '#1e293b' : gem.color,
+                                    color: disabled ? '#94a3b8' : '#060a12',
                                     border: 'none',
                                     borderRadius: 6,
                                     padding: '6px 10px',
@@ -1394,13 +1384,13 @@ export default function App() {
                                     flexShrink: 0,
                                   }}
                                 >
-                                  {!isOwned
-                                    ? 'Niet Gevonden'
-                                    : usedBySkill
+                                  {usedBySkill
                                     ? `Bij ${usedBySkill.baseName}`
                                     : isAtLevelLimit
                                     ? `Max (${hud.maxSocketsPerSkill}/${hud.maxSocketsPerSkill})`
-                                    : 'Plaats Gem'}
+                                    : !hasGemToSpend
+                                    ? 'Geen Uncut Gem'
+                                    : 'Gebruik 1 Gem'}
                                 </button>
                               </div>
                             );
@@ -1740,14 +1730,14 @@ export default function App() {
                   key: '[K]',
                   name: 'DNA Skills',
                   sub:
-                    unequippedGemsCount > 0
-                      ? `+${unequippedGemsCount} Gem!`
+                    uncutCount > 0
+                      ? `${uncutCount} Uncut Gem`
                       : hud.dnaPoints > 0
                       ? `+${hud.dnaPoints} DNA!`
                       : `Lvl ${hud.level}/${hud.maxLevel}`,
                   color: '#2dd4bf',
                   locked: false,
-                  active: hud.dnaPoints > 0 || unequippedGemsCount > 0 || activeModal === 'skills',
+                  active: hud.dnaPoints > 0 || uncutCount > 0 || activeModal === 'skills',
                   onClick: () => {
                     setSelectedSkillKey(null);
                     setActiveModal((p) => (p === 'skills' ? 'none' : 'skills'));
