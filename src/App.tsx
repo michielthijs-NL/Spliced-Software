@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import {
   ArenaScene,
+  DUNGEONS,
   type HudSnapshot,
   type SomaticUpgrades,
   type LootItem,
@@ -20,12 +21,16 @@ const initialHud: HudSnapshot = {
   xpToNext: 100,
   level: 1,
   dnaPoints: 0,
-  packNumber: 1,
-  enemiesRemaining: 20,
+  activeDungeon: DUNGEONS[0],
+  dungeonsClearedTotal: 0,
+  enemiesRemaining: 19,
   cooldowns: { slam: 0, dash: 0 },
   upgrades: { bruteForce: 0, flexibleMass: 0, isotopeCore: 0 },
   equipped: { WEAPON: null, ARMOR: null, INJECTOR: null },
   inventory: [],
+  runOutcome: 'PLAYING',
+  bossRewardItem: null,
+  dungeonStats: { kills: 0, bossDefeated: false, xpEarned: 0, lootFound: 0 },
 };
 
 const rarityColors: Record<ItemRarity, { border: string; bg: string; text: string }> = {
@@ -45,9 +50,12 @@ export default function App() {
   const sceneRef = useRef<ArenaScene | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(initialHud);
   const [activeModal, setActiveModal] = useState<'none' | 'inventory' | 'levelup'>('none');
+  const [showDungeonSelect, setShowDungeonSelect] = useState<boolean>(true);
+  const [selectedDungeonId, setSelectedDungeonId] = useState<string>(DUNGEONS[0].id);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (showDungeonSelect) return;
       const k = e.key.toLowerCase();
       if (k === 'i') {
         e.preventDefault();
@@ -61,7 +69,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [showDungeonSelect]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -91,6 +99,13 @@ export default function App() {
     };
   }, []);
 
+  const handleEnterDungeon = (dungeonId: string) => {
+    setSelectedDungeonId(dungeonId);
+    setActiveModal('none');
+    setShowDungeonSelect(false);
+    sceneRef.current?.startDungeon(dungeonId);
+  };
+
   const handleSplice = (stat: keyof SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
   const handleEquip = (itemId: string) => sceneRef.current?.equipItem(itemId);
   const handleSalvage = (itemId: string) => sceneRef.current?.salvageItem(itemId);
@@ -115,13 +130,32 @@ export default function App() {
         {/* Header */}
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: '#38bdf8' }}>
-              ZERO-TO-HERO RUN &bull; SECTOR #{hud.packNumber} ({hud.enemiesRemaining} HOSTILES)
+            <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: hud.activeDungeon.accent }}>
+              DUNGEON: {hud.activeDungeon.name.toUpperCase()} &bull; BOSS: {hud.activeDungeon.bossName.toUpperCase()} ({hud.enemiesRemaining} HOSTILES)
             </div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#ffffff' }}>Spliced: Meltdown</h1>
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => {
+                setActiveModal('none');
+                setShowDungeonSelect(true);
+              }}
+              style={{
+                backgroundColor: '#0f172a',
+                border: '1px solid #475569',
+                color: '#f8fafc',
+                borderRadius: 10,
+                padding: '8px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              DUNGEONS ({hud.dungeonsClearedTotal} CLEARED)
+            </button>
+
             <button
               onClick={() => setActiveModal((prev) => (prev === 'inventory' ? 'none' : 'inventory'))}
               style={{
@@ -177,7 +211,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Hoofd Game Viewport + Modals */}
+        {/* Hoofd Game Viewport + Overlays */}
         <div style={{ position: 'relative', width: '100%' }}>
           <div
             ref={containerRef}
@@ -192,8 +226,399 @@ export default function App() {
             }}
           />
 
+          {/* DUNGEON SELECT LOBBY (VOOR START & TUSSEN RUNS) */}
+          {showDungeonSelect && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(6, 10, 18, 0.94)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: 12,
+                padding: 22,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 40,
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: 980,
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: 16,
+                  padding: 20,
+                  boxShadow: '0 25px 70px rgba(0,0,0,0.85)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px solid #1e293b',
+                    paddingBottom: 12,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: '#38bdf8' }}>
+                      DUNGEON FINDER &bull; PERSISTENT CHARACTER PROGRESSION
+                    </div>
+                    <h2 style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 800 }}>Kies een Dungeon om binnen te vallen</h2>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: 12 }}>
+                    <div style={{ fontWeight: 800, color: '#c084fc' }}>
+                      Karakter Rank Level {hud.level} ({hud.dungeonsClearedTotal} Dungeons voltooid)
+                    </div>
+                    <div style={{ color: '#94a3b8' }}>
+                      Max HP: {hud.maxHp} &bull; DNA Punten: {hud.dnaPoints} &bull; Rugzak: {hud.inventory.length}/12
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 18 }}>
+                  {DUNGEONS.map((d) => {
+                    const isSelected = selectedDungeonId === d.id;
+                    const underLeveled = hud.level < d.recommendedLevel;
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => setSelectedDungeonId(d.id)}
+                        style={{
+                          border: `2px solid ${isSelected ? d.accent : '#1e293b'}`,
+                          backgroundColor: isSelected ? 'rgba(30, 41, 59, 0.85)' : '#090d16',
+                          borderRadius: 12,
+                          padding: 12,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          minHeight: 215,
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 10, fontFamily: 'monospace', color: d.accent, fontWeight: 700 }}>
+                            {d.difficultyLabel}
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 4 }}>{d.name}</div>
+                          <div
+                            style={{
+                              marginTop: 8,
+                              padding: '5px 7px',
+                              borderRadius: 6,
+                              backgroundColor: '#0f172a',
+                              border: '1px solid #1e293b',
+                              fontSize: 11,
+                            }}
+                          >
+                            <div style={{ color: '#94a3b8', fontSize: 10 }}>EINDBAAS</div>
+                            <div style={{ color: '#fbbf24', fontWeight: 700 }}>{d.bossName}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 12, fontSize: 11, color: '#cbd5e1' }}>
+                          <div>Enemy Power: <strong>{d.enemyMultiplier}x</strong></div>
+                          <div>Loot Bonus: <strong>+{Math.round(d.rareBonusChance * 100)}% Rare</strong></div>
+                          {underLeveled && (
+                            <div style={{ color: '#fb7185', fontSize: 10, marginTop: 4 }}>
+                              Aanbevolen: Level {d.recommendedLevel}+
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        setShowDungeonSelect(false);
+                        setActiveModal('inventory');
+                      }}
+                      style={{
+                        backgroundColor: '#1e293b',
+                        color: '#e2e8f0',
+                        border: '1px solid #334155',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Bekijk Gear &amp; Rugzak [I]
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDungeonSelect(false);
+                        setActiveModal('levelup');
+                      }}
+                      style={{
+                        backgroundColor: '#1e293b',
+                        color: '#e2e8f0',
+                        border: '1px solid #334155',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      DNA Mutaties [J] {hud.dnaPoints > 0 ? `(+${hud.dnaPoints})` : ''}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => handleEnterDungeon(selectedDungeonId)}
+                    style={{
+                      background: 'linear-gradient(90deg, #0284c7, #10b981)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '12px 24px',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
+                    }}
+                  >
+                    ENTER DUNGEON: {(DUNGEONS.find((d) => d.id === selectedDungeonId) ?? DUNGEONS[0]).name.toUpperCase()} &rarr;
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DUNGEON VICTORY & BOSS REWARD SUMMARY */}
+          {!showDungeonSelect && hud.runOutcome === 'VICTORY' && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(5, 15, 12, 0.90)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: 12,
+                padding: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 35,
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: 580,
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #10b98188',
+                  borderRadius: 16,
+                  padding: 24,
+                  boxShadow: '0 25px 70px rgba(16, 185, 129, 0.25)',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 3, color: '#34d399' }}>
+                  DUNGEON CLEARED &bull; BOSS DEFEATED
+                </div>
+                <h2 style={{ margin: '4px 0 6px', fontSize: 28, fontWeight: 900, color: '#ffffff' }}>
+                  {hud.activeDungeon.name.toUpperCase()} VOLTOOID!
+                </h2>
+                <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
+                  Je hebt <strong>{hud.activeDungeon.bossName}</strong> verslagen. Al je XP, Levels en Gear blijven behouden!
+                </p>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 10,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>HOSTILES VERSLAGEN</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399' }}>{hud.dungeonStats.kills}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>VERDIENDE XP</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#c084fc' }}>+{hud.dungeonStats.xpEarned} XP</div>
+                  </div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>LOOT VERZAMELD</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#38bdf8' }}>{hud.dungeonStats.lootFound} Items</div>
+                  </div>
+                </div>
+
+                {hud.bossRewardItem && (
+                  <div
+                    style={{
+                      border: `1px solid ${rarityColors[hud.bossRewardItem.rarity].border}`,
+                      backgroundColor: rarityColors[hud.bossRewardItem.rarity].bg,
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 18,
+                    }}
+                  >
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#fbbf24', fontWeight: 700 }}>
+                      BOSS CHEST BELONING (TOEGEVOEGD AAN RUGZAK)
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 800,
+                        color: rarityColors[hud.bossRewardItem.rarity].text,
+                        marginTop: 2,
+                      }}
+                    >
+                      {hud.bossRewardItem.name} ({hud.bossRewardItem.rarity})
+                    </div>
+                    <div style={{ fontSize: 12, color: '#e2e8f0' }}>{hud.bossRewardItem.description}</div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => sceneRef.current?.retryCurrentDungeon()}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Herhaal {hud.activeDungeon.name}
+                  </button>
+                  <button
+                    onClick={() => setShowDungeonSelect(true)}
+                    style={{
+                      flex: 1.4,
+                      background: 'linear-gradient(90deg, #059669, #10b981)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    KIES VOLGENDE DUNGEON &rarr;
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DUNGEON WIPE (HP = 0, PROGRESSIE BLIJFT BEHOUDEN) */}
+          {!showDungeonSelect && hud.runOutcome === 'WIPE' && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(14, 5, 8, 0.90)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: 12,
+                padding: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 35,
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: 540,
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #f43f5e88',
+                  borderRadius: 16,
+                  padding: 24,
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 3, color: '#fb7185' }}>
+                  DUNGEON WIPE &bull; VITALITY DEPLETED
+                </div>
+                <h2 style={{ margin: '4px 0 6px', fontSize: 26, fontWeight: 900, color: '#ffffff' }}>
+                  VERSLAGEN IN {hud.activeDungeon.name.toUpperCase()}
+                </h2>
+                <p style={{ margin: '0 0 16px', fontSize: 13, color: '#cbd5e1' }}>
+                  Geen zorgen: je behoudt je <strong>Level {hud.level}</strong>, al je <strong>DNA-mutaties</strong> en je{' '}
+                  <strong>gevonden gear</strong>!
+                </p>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 10,
+                    marginBottom: 18,
+                  }}
+                >
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>KILLS IN RUN</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34d399' }}>{hud.dungeonStats.kills}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>BEHOUDEN XP</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#c084fc' }}>+{hud.dungeonStats.xpEarned} XP</div>
+                  </div>
+                  <div style={{ backgroundColor: '#090d16', border: '1px solid #1e293b', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>LOOT BEHOUDEN</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8' }}>{hud.dungeonStats.lootFound} Items</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => setShowDungeonSelect(true)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Andere Dungeon Kiezen
+                  </button>
+                  <button
+                    onClick={() => sceneRef.current?.retryCurrentDungeon()}
+                    style={{
+                      flex: 1.3,
+                      background: 'linear-gradient(90deg, #e11d48, #f43f5e)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    OPNIEUW PROBEREN
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* [I] INVENTORY & GEAR MODAL */}
-          {activeModal === 'inventory' && (
+          {!showDungeonSelect && activeModal === 'inventory' && (
             <div
               style={{
                 position: 'absolute',
@@ -205,7 +630,7 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 20,
+                zIndex: 25,
               }}
             >
               <div
@@ -232,7 +657,7 @@ export default function App() {
                   <div>
                     <span style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8' }}>SOMATIC GEAR &amp; RUGZAK</span>
                     <span style={{ marginLeft: 12, fontSize: 12, color: '#94a3b8' }}>
-                      Schaarse Loot (6% mob / 12% boss)
+                      Blijvende Uitrusting (6% mob / 12% boss)
                     </span>
                   </div>
                   <button
@@ -253,7 +678,6 @@ export default function App() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 16 }}>
-                  {/* Kolom 1: Equipped Gear */}
                   <div>
                     <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8', marginBottom: 8 }}>
                       EQUIPPED GEAR
@@ -296,7 +720,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Kolom 2: Rugzak */}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8' }}>RUGZAK</span>
@@ -316,7 +739,7 @@ export default function App() {
                           color: '#64748b',
                         }}
                       >
-                        Rugzak is leeg. Loot is schaars: gewone vijanden hebben 6% dropkans, bazen 12%.
+                        Rugzak is leeg. Versla Dungeon Bosses voor gegarandeerde Boss Chest loot!
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 280, overflowY: 'auto' }}>
@@ -383,7 +806,7 @@ export default function App() {
           )}
 
           {/* [J] LEVEL-UP & DNA MUTATIONS MODAL */}
-          {activeModal === 'levelup' && (
+          {!showDungeonSelect && activeModal === 'levelup' && (
             <div
               style={{
                 position: 'absolute',
@@ -395,7 +818,7 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 20,
+                zIndex: 25,
               }}
             >
               <div
@@ -507,7 +930,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Onderste Statusbalk met XP-balk & Controls */}
+        {/* Onderste Statusbalk */}
         <footer
           style={{
             backgroundColor: '#0f172a',
@@ -519,10 +942,9 @@ export default function App() {
             gap: 10,
           }}
         >
-          {/* Prominente XP & Level Balk */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 3 }}>
-              <span style={{ color: '#c084fc' }}>LEVEL {hud.level} &bull; ZERO-TO-HERO PROGRESSIE</span>
+              <span style={{ color: '#c084fc' }}>LEVEL {hud.level} &bull; KARAKTER PROGRESSIE</span>
               <span style={{ color: '#e2e8f0' }}>
                 {hud.xp} / {hud.xpToNext} XP ({Math.round(xpPct)}%)
               </span>
@@ -539,7 +961,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* HP/Energy | Ability Bar | Heat */}
           <div
             style={{
               display: 'grid',

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 export type ItemSlot = 'WEAPON' | 'ARMOR' | 'INJECTOR';
 export type ItemRarity = 'COMMON' | 'RARE' | 'EXOTIC';
+export type RunOutcome = 'PLAYING' | 'VICTORY' | 'WIPE';
 
 export interface LootItem {
   id: string;
@@ -23,6 +24,106 @@ export interface SomaticUpgrades {
   isotopeCore: number;
 }
 
+export interface DungeonDef {
+  id: string;
+  name: string;
+  bossName: string;
+  recommendedLevel: number;
+  difficultyLabel: string;
+  enemyMultiplier: number;
+  rareBonusChance: number;
+  bg: number;
+  floorA: number;
+  floorB: number;
+  gridLine: number;
+  wallFill: number;
+  wallTrim: number;
+  accent: string;
+}
+
+export const DUNGEONS: DungeonDef[] = [
+  {
+    id: 'cryo',
+    name: 'Cryo Reactor',
+    bossName: 'Cryo-Warden Vex',
+    recommendedLevel: 1,
+    difficultyLabel: 'Normal (Lvl 1+)',
+    enemyMultiplier: 1.0,
+    rareBonusChance: 0.0,
+    bg: 0x0b101b,
+    floorA: 0x111927,
+    floorB: 0x152033,
+    gridLine: 0x1e2d44,
+    wallFill: 0x26354d,
+    wallTrim: 0x38bdf8,
+    accent: '#38bdf8',
+  },
+  {
+    id: 'bio',
+    name: 'Bio-Hazard Lab',
+    bossName: 'Brood-Matriarch Syl',
+    recommendedLevel: 3,
+    difficultyLabel: 'Heroic (Lvl 3+)',
+    enemyMultiplier: 1.45,
+    rareBonusChance: 0.15,
+    bg: 0x081410,
+    floorA: 0x0f211b,
+    floorB: 0x142b23,
+    gridLine: 0x1d3d32,
+    wallFill: 0x244a3d,
+    wallTrim: 0x10b981,
+    accent: '#34d399',
+  },
+  {
+    id: 'foundry',
+    name: 'Isotope Foundry',
+    bossName: 'Forgemaster Kael',
+    recommendedLevel: 5,
+    difficultyLabel: 'Heroic+ (Lvl 5+)',
+    enemyMultiplier: 2.0,
+    rareBonusChance: 0.30,
+    bg: 0x140d09,
+    floorA: 0x1f1510,
+    floorB: 0x291c15,
+    gridLine: 0x3b281e,
+    wallFill: 0x473023,
+    wallTrim: 0xf59e0b,
+    accent: '#fbbf24',
+  },
+  {
+    id: 'crimson',
+    name: 'Crimson Containment',
+    bossName: 'High Inquisitor Malakor',
+    recommendedLevel: 8,
+    difficultyLabel: 'Mythic (Lvl 8+)',
+    enemyMultiplier: 2.8,
+    rareBonusChance: 0.45,
+    bg: 0x16090d,
+    floorA: 0x241016,
+    floorB: 0x2e151d,
+    gridLine: 0x451f2b,
+    wallFill: 0x542634,
+    wallTrim: 0xf43f5e,
+    accent: '#fb7185',
+  },
+  {
+    id: 'void',
+    name: 'Void Relay',
+    bossName: 'Archon of the Rift',
+    recommendedLevel: 12,
+    difficultyLabel: 'Mythic+ (Lvl 12+)',
+    enemyMultiplier: 3.8,
+    rareBonusChance: 0.65,
+    bg: 0x100b1a,
+    floorA: 0x191229,
+    floorB: 0x211836,
+    gridLine: 0x31244f,
+    wallFill: 0x3d2d61,
+    wallTrim: 0xa855f7,
+    accent: '#c084fc',
+  },
+];
+
 export interface HudSnapshot {
   hp: number;
   maxHp: number;
@@ -34,77 +135,22 @@ export interface HudSnapshot {
   xpToNext: number;
   level: number;
   dnaPoints: number;
-  packNumber: number;
+  activeDungeon: DungeonDef;
+  dungeonsClearedTotal: number;
   enemiesRemaining: number;
   cooldowns: { slam: number; dash: number };
   upgrades: SomaticUpgrades;
   equipped: Record<ItemSlot, LootItem | null>;
   inventory: LootItem[];
+  runOutcome: RunOutcome;
+  bossRewardItem: LootItem | null;
+  dungeonStats: {
+    kills: number;
+    bossDefeated: boolean;
+    xpEarned: number;
+    lootFound: number;
+  };
 }
-
-interface SectorTheme {
-  name: string;
-  bg: number;
-  floorA: number;
-  floorB: number;
-  gridLine: number;
-  wallFill: number;
-  wallTrim: number;
-  accent: string;
-}
-
-const SECTOR_THEMES: SectorTheme[] = [
-  {
-    name: 'CRYO REACTOR',
-    bg: 0x0b101b,
-    floorA: 0x111927,
-    floorB: 0x152033,
-    gridLine: 0x1e2d44,
-    wallFill: 0x26354d,
-    wallTrim: 0x38bdf8,
-    accent: '#38bdf8',
-  },
-  {
-    name: 'ISOTOPE FOUNDRY',
-    bg: 0x140d09,
-    floorA: 0x1f1510,
-    floorB: 0x291c15,
-    gridLine: 0x3b281e,
-    wallFill: 0x473023,
-    wallTrim: 0xf59e0b,
-    accent: '#fbbf24',
-  },
-  {
-    name: 'BIO-HAZARD LAB',
-    bg: 0x081410,
-    floorA: 0x0f211b,
-    floorB: 0x142b23,
-    gridLine: 0x1d3d32,
-    wallFill: 0x244a3d,
-    wallTrim: 0x10b981,
-    accent: '#34d399',
-  },
-  {
-    name: 'CRIMSON CONTAINMENT',
-    bg: 0x16090d,
-    floorA: 0x241016,
-    floorB: 0x2e151d,
-    gridLine: 0x451f2b,
-    wallFill: 0x542634,
-    wallTrim: 0xf43f5e,
-    accent: '#fb7185',
-  },
-  {
-    name: 'VOID RELAY',
-    bg: 0x100b1a,
-    floorA: 0x191229,
-    floorB: 0x211836,
-    gridLine: 0x31244f,
-    wallFill: 0x3d2d61,
-    wallTrim: 0xa855f7,
-    accent: '#c084fc',
-  },
-];
 
 interface EnemyData {
   sprite: Phaser.GameObjects.Container;
@@ -117,7 +163,6 @@ interface EnemyData {
   xpValue: number;
   isBoss: boolean;
   isElite: boolean;
-  hitFlashUntil: number;
   lastAttackAt: number;
 }
 
@@ -149,16 +194,15 @@ export class ArenaScene extends Phaser.Scene {
   private projectiles: ProjectileData[] = [];
   private lootDrops: LootDropData[] = [];
 
-  // Exit Bulkhead Door bij Point B
   private exitDoorLeft!: Phaser.GameObjects.Rectangle;
   private exitDoorRight!: Phaser.GameObjects.Rectangle;
   private exitDoorBlocker!: Phaser.GameObjects.Rectangle;
   private exitDoorLabel!: Phaser.GameObjects.Text;
   private exitDoorZone!: Phaser.Geom.Rectangle;
   private exitDoorOpen = false;
-  private transitioningSector = false;
+  private sceneReady = false;
 
-  // Player Progression & Stats (Zero-to-Hero)
+  // Blijvende Karakter-progressie (WoW-style)
   private baseMaxHp = 120;
   private hp = 120;
   private baseMaxEnergy = 100;
@@ -171,8 +215,8 @@ export class ArenaScene extends Phaser.Scene {
   private xpToNext = 100;
   private level = 1;
   private dnaPoints = 0;
-  private sectorNumber = 1;
-  private currentTheme: SectorTheme = SECTOR_THEMES[0];
+  private dungeonsClearedTotal = 0;
+  private activeDungeon: DungeonDef = DUNGEONS[0];
 
   private upgrades: SomaticUpgrades = {
     bruteForce: 0,
@@ -186,6 +230,16 @@ export class ArenaScene extends Phaser.Scene {
     INJECTOR: null,
   };
   private inventory: LootItem[] = [];
+
+  // Huidige Dungeon Run state
+  private runOutcome: RunOutcome = 'PLAYING';
+  private bossRewardItem: LootItem | null = null;
+  private dungeonStats = {
+    kills: 0,
+    bossDefeated: false,
+    xpEarned: 0,
+    lootFound: 0,
+  };
 
   // Cooldowns & Timers
   private lastShotAt = 0;
@@ -216,6 +270,35 @@ export class ArenaScene extends Phaser.Scene {
     this.pushHud(true);
   }
 
+  public startDungeon(dungeonId: string): void {
+    const chosen = DUNGEONS.find((d) => d.id === dungeonId) ?? DUNGEONS[0];
+    this.activeDungeon = chosen;
+    this.runOutcome = 'PLAYING';
+    this.bossRewardItem = null;
+    this.hp = this.getMaxHp();
+    this.energy = this.baseMaxEnergy;
+    this.heat = 0;
+    this.meltdownActive = false;
+    this.lastSlamAt = -10000;
+    this.lastDodgeAt = -10000;
+    this.invulnerableUntil = 0;
+    this.dungeonStats = {
+      kills: 0,
+      bossDefeated: false,
+      xpEarned: 0,
+      lootFound: 0,
+    };
+
+    if (this.sceneReady) {
+      this.buildProceduralDungeon(false);
+    }
+    this.pushHud(true);
+  }
+
+  public retryCurrentDungeon(): void {
+    this.startDungeon(this.activeDungeon.id);
+  }
+
   public applyUpgrade(stat: keyof SomaticUpgrades): void {
     if (this.dnaPoints <= 0) return;
     this.dnaPoints -= 1;
@@ -244,7 +327,7 @@ export class ArenaScene extends Phaser.Scene {
     const idx = this.inventory.findIndex((i) => i.id === itemId);
     if (idx === -1) return;
     const [removed] = this.inventory.splice(idx, 1);
-    const xpGain = removed.rarity === 'EXOTIC' ? 90 : removed.rarity === 'RARE' ? 45 : 20;
+    const xpGain = removed.rarity === 'EXOTIC' ? 95 : removed.rarity === 'RARE' ? 45 : 20;
     this.grantXp(xpGain);
     this.pushHud(true);
   }
@@ -292,6 +375,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.runOutcome !== 'PLAYING') return;
       if (pointer.rightButtonDown()) {
         this.tryStretchSlam();
       } else if (pointer.leftButtonDown()) {
@@ -299,14 +383,13 @@ export class ArenaScene extends Phaser.Scene {
       }
     });
 
-    this.buildProceduralSector(true);
+    this.sceneReady = true;
+    this.buildProceduralDungeon(true);
   }
 
-  private buildProceduralSector(isInitial: boolean): void {
-    this.transitioningSector = false;
+  private buildProceduralDungeon(isInitial: boolean): void {
     this.exitDoorOpen = false;
 
-    // Wis eerdere objecten bij overgang naar een volgend level
     if (!isInitial) {
       this.children.removeAll(true);
       this.enemies = [];
@@ -315,40 +398,36 @@ export class ArenaScene extends Phaser.Scene {
       this.wallRects = [];
     }
 
-    // Kies een nieuw kleurenthema (altijd anders dan het vorige level)
-    const availableThemes = SECTOR_THEMES.filter((t) => t.name !== this.currentTheme.name);
-    this.currentTheme = Phaser.Utils.Array.GetRandom(availableThemes);
-    this.cameras.main.setBackgroundColor(this.currentTheme.bg);
+    const theme = this.activeDungeon;
+    this.cameras.main.setBackgroundColor(theme.bg);
 
-    // 1. Vloer & Raster
+    // 1. Vloertegels
     const floorGfx = this.add.graphics();
     const tileSize = 140;
     for (let x = 0; x < this.worldWidth; x += tileSize) {
       for (let y = 0; y < this.worldHeight; y += tileSize) {
         const isAlt = ((x / tileSize + y / tileSize) & 1) === 0;
-        floorGfx.fillStyle(isAlt ? this.currentTheme.floorA : this.currentTheme.floorB, 1);
+        floorGfx.fillStyle(isAlt ? theme.floorA : theme.floorB, 1);
         floorGfx.fillRect(x, y, tileSize, tileSize);
-        floorGfx.lineStyle(1, this.currentTheme.gridLine, 0.7);
+        floorGfx.lineStyle(1, theme.gridLine, 0.7);
         floorGfx.strokeRect(x + 12, y + 12, tileSize - 24, tileSize - 24);
       }
     }
 
-    // 2. Procedurele Doolhof-muren (altijd begaanbaar van Point A linksboven naar Point B rechtsonder)
+    // 2. Procedurele Dungeon-muren
     this.walls = this.physics.add.staticGroup();
     const t = 44;
 
-    // Buitenmuren
     this.addWall(this.worldWidth / 2, t / 2, this.worldWidth, t);
     this.addWall(this.worldWidth / 2, this.worldHeight - t / 2, this.worldWidth, t);
     this.addWall(t / 2, this.worldHeight / 2, t, this.worldHeight);
     this.addWall(this.worldWidth - t / 2, this.worldHeight / 2, t, this.worldHeight);
 
-    // 3 horizontale sectie-barrières met wisselende doorgangen per gegenereerde map
     const rowY = [540, 1060, 1580];
     const gapPositions = [
-      Phaser.Math.Between(2150, 2480), // Rij 1 doorgang rechts
-      Phaser.Math.Between(340, 760),   // Rij 2 doorgang links
-      Phaser.Math.Between(1850, 2320), // Rij 3 doorgang rechts-midden
+      Phaser.Math.Between(2150, 2480),
+      Phaser.Math.Between(340, 760),
+      Phaser.Math.Between(1850, 2320),
     ];
     const gapWidth = 340;
 
@@ -361,7 +440,6 @@ export class ArenaScene extends Phaser.Scene {
       this.addWall(t + leftWidth / 2, y, leftWidth, 42);
       this.addWall(rightStart + rightWidth / 2, y, rightWidth, 42);
 
-      // Procedurele dekking-pilaren in elke gang
       const pillarCount = Phaser.Math.Between(2, 3);
       for (let p = 0; p < pillarCount; p++) {
         const px = Phaser.Math.Between(480, 2300);
@@ -372,43 +450,39 @@ export class ArenaScene extends Phaser.Scene {
       }
     });
 
-    // Sector-titel in de vloer
-    this.add.text(140, 82, `SECTOR 0${this.sectorNumber} // ${this.currentTheme.name} (POINT A -> DOOR B)`, {
+    this.add.text(140, 82, `DUNGEON // ${theme.name.toUpperCase()} — BOSS: ${theme.bossName.toUpperCase()}`, {
       fontFamily: 'monospace',
       fontSize: '15px',
-      color: this.currentTheme.accent,
+      color: theme.accent,
     });
 
-    // 3. Point A (Start Airlock)
+    // 3. Entry Airlock
     const startX = 280;
     const startY = 280;
-    this.add.circle(startX, startY, 92, this.currentTheme.wallTrim, 0.14);
-    this.add.circle(startX, startY, 54).setStrokeStyle(2, this.currentTheme.wallTrim, 0.8);
+    this.add.circle(startX, startY, 92, theme.wallTrim, 0.14);
+    this.add.circle(startX, startY, 54).setStrokeStyle(2, theme.wallTrim, 0.8);
     this.add
-      .text(startX, startY - 76, '[POINT A] ENTRY AIRLOCK', {
+      .text(startX, startY - 76, '[ENTRY] DUNGEON ENTRANCE', {
         fontFamily: 'monospace',
         fontSize: '13px',
         color: '#e2e8f0',
       })
       .setOrigin(0.5);
 
-    // 4. Point B: Gesloten Sector Bulkhead-Deur (opent pas na verslaan van de baas)
+    // 4. Boss Exit Bulkhead-Deur
     const doorX = 2520;
     const doorY = 1860;
     this.exitDoorZone = new Phaser.Geom.Rectangle(doorX - 95, doorY - 85, 190, 170);
 
-    // Deurframe
     this.add.rectangle(doorX, doorY, 190, 140, 0x090d16, 0.9).setStrokeStyle(3, 0x475569);
-    // Deurvleugels (schuiven open zodra baas dood is)
     this.exitDoorLeft = this.add.rectangle(doorX - 42, doorY, 82, 126, 0x991b1b, 0.95).setStrokeStyle(2, 0xf87171);
     this.exitDoorRight = this.add.rectangle(doorX + 42, doorY, 82, 126, 0x991b1b, 0.95).setStrokeStyle(2, 0xf87171);
 
-    // Fysieke blokkade tot de baas verslagen is
     this.exitDoorBlocker = this.add.rectangle(doorX, doorY, 176, 128, 0xff0000, 0);
     this.physics.add.existing(this.exitDoorBlocker, true);
 
     this.exitDoorLabel = this.add
-      .text(doorX, doorY - 96, '[LOCKED] VERSLA SECTOR WARDEN', {
+      .text(doorX, doorY - 96, `[LOCKED] VERSLA ${theme.bossName.toUpperCase()}`, {
         fontFamily: 'monospace',
         fontSize: '13px',
         fontStyle: 'bold',
@@ -418,21 +492,21 @@ export class ArenaScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // 5. Speler aanmaken
+    // 5. Speler & Colliders
     this.createPlayer(startX, startY);
     this.physics.add.collider(this.player, this.walls);
     this.physics.add.collider(this.player, this.exitDoorBlocker);
 
-    // 6. Vijanden & Sector Warden Eindbaas spawnen
-    this.spawnSectorEnemies(doorX - 240, doorY - 40);
+    // 6. Vijanden & Dungeon Boss
+    this.spawnDungeonEnemies(doorX - 240, doorY - 40);
 
-    // 7. Vaste HUD-elementen op de camera (Minimap & Controls hint)
+    // 7. Minimap & Controls bar
     this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(50);
     this.add
       .text(
         18,
         648,
-        'WASD: Bewegen | LMB: Bio-Shot | RMB: Stretch-Slam | SPATIE: Dodge | E: Meltdown Ult | Versla Warden -> Door B',
+        `WASD: Bewegen | LMB: Bio-Shot | RMB: Stretch-Slam | SPATIE: Dodge | E: Meltdown Ult | Versla ${theme.bossName}`,
         {
           fontFamily: 'monospace',
           fontSize: '12px',
@@ -445,13 +519,13 @@ export class ArenaScene extends Phaser.Scene {
       .setDepth(50);
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-    this.cameras.main.flash(350, 15, 23, 42);
+    this.cameras.main.flash(300, 15, 23, 42);
     this.pushHud(true);
   }
 
   private addWall(x: number, y: number, w: number, h: number): void {
-    const rect = this.add.rectangle(x, y, w, h, this.currentTheme.wallFill);
-    rect.setStrokeStyle(2, this.currentTheme.wallTrim, 0.45);
+    const rect = this.add.rectangle(x, y, w, h, this.activeDungeon.wallFill);
+    rect.setStrokeStyle(2, this.activeDungeon.wallTrim, 0.45);
     this.walls.add(rect);
     this.wallRects.push(new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h));
   }
@@ -473,10 +547,9 @@ export class ArenaScene extends Phaser.Scene {
     this.playerBody.setCollideWorldBounds(true);
   }
 
-  private spawnSectorEnemies(bossX: number, bossY: number): void {
-    // 19 gewone / elite vijanden verspreid over de 4 gangen
+  private spawnDungeonEnemies(bossX: number, bossY: number): void {
     const laneCenters = [300, 800, 1320, 1840];
-    const totalMobs = 18 + Math.min(8, this.sectorNumber);
+    const totalMobs = 18;
 
     for (let i = 0; i < totalMobs; i++) {
       const lane = laneCenters[i % laneCenters.length];
@@ -489,29 +562,28 @@ export class ArenaScene extends Phaser.Scene {
       this.createEnemy(ex, ey, false, isElite);
     }
 
-    // 1 Sector Warden Eindbaas vlak voor de vergrendelde deur bij Point B
     this.createEnemy(bossX, bossY, true, true);
   }
 
   private createEnemy(x: number, y: number, isBoss: boolean, isElite: boolean): void {
-    const scale = 1 + (this.sectorNumber - 1) * 0.22;
-    const maxHp = Math.round((isBoss ? 480 : isElite ? 125 : 52) * scale);
-    const speed = isBoss ? 125 : isElite ? 145 : 130;
-    const damage = Math.round((isBoss ? 24 : isElite ? 15 : 10) * (1 + (this.sectorNumber - 1) * 0.12));
-    const xpValue = isBoss ? 240 : isElite ? 65 : 28;
+    const mult = this.activeDungeon.enemyMultiplier;
+    const maxHp = Math.round((isBoss ? 520 : isElite ? 125 : 52) * mult);
+    const speed = isBoss ? 128 : isElite ? 145 : 130;
+    const damage = Math.round((isBoss ? 25 : isElite ? 15 : 10) * (1 + (mult - 1) * 0.65));
+    const xpValue = Math.round((isBoss ? 260 : isElite ? 65 : 28) * (1 + (mult - 1) * 0.5));
 
-    const size = isBoss ? 46 : isElite ? 30 : 22;
+    const size = isBoss ? 48 : isElite ? 30 : 22;
     const color = isBoss ? 0xf59e0b : isElite ? 0xa855f7 : 0xef4444;
 
     const bodyRect = this.add.rectangle(0, 0, size, size, color).setStrokeStyle(2, 0xffffff, 0.35);
     const eye = this.add.rectangle(0, -4, size * 0.6, 5, 0x090d16);
-    const hpBg = this.add.rectangle(0, -size / 2 - 10, size + 10, 5, 0x090d16);
-    const hpBar = this.add.rectangle(0, -size / 2 - 10, size + 10, 5, isBoss ? 0xfacc15 : 0xf43f5e);
+    const hpBg = this.add.rectangle(0, -size / 2 - 10, size + 12, 5, 0x090d16);
+    const hpBar = this.add.rectangle(0, -size / 2 - 10, size + 12, 5, isBoss ? 0xfacc15 : 0xf43f5e);
 
     const children: Phaser.GameObjects.GameObject[] = [bodyRect, eye, hpBg, hpBar];
     if (isBoss || isElite) {
       const tag = this.add
-        .text(0, -size / 2 - 22, isBoss ? '★ SECTOR WARDEN' : '★ ELITE', {
+        .text(0, -size / 2 - 22, isBoss ? `★ ${this.activeDungeon.bossName.toUpperCase()}` : '★ ELITE', {
           fontFamily: 'monospace',
           fontSize: isBoss ? '12px' : '10px',
           fontStyle: 'bold',
@@ -541,7 +613,6 @@ export class ArenaScene extends Phaser.Scene {
       xpValue,
       isBoss,
       isElite,
-      hitFlashUntil: 0,
       lastAttackAt: 0,
     });
   }
@@ -549,13 +620,12 @@ export class ArenaScene extends Phaser.Scene {
   private unlockExitDoor(): void {
     if (this.exitDoorOpen) return;
     this.exitDoorOpen = true;
+    this.dungeonStats.bossDefeated = true;
 
-    // Verwijder fysieke blokkade
     if (this.exitDoorBlocker && this.exitDoorBlocker.body) {
       (this.exitDoorBlocker.body as Phaser.Physics.Arcade.StaticBody).enable = false;
     }
 
-    // Kleur deur groen en schuif de vleugels open
     this.exitDoorLeft.setFillStyle(0x10b981, 0.95).setStrokeStyle(2, 0x6ee7b7);
     this.exitDoorRight.setFillStyle(0x10b981, 0.95).setStrokeStyle(2, 0x6ee7b7);
 
@@ -572,17 +642,16 @@ export class ArenaScene extends Phaser.Scene {
       ease: 'Power2',
     });
 
-    this.exitDoorLabel.setText(`[OPEN] LOOP DOOR DE DEUR -> SECTOR 0${this.sectorNumber + 1}`);
+    this.exitDoorLabel.setText('[OPEN] LOOP DOOR DE DEUR VOOR DUNGEON BELONING');
     this.exitDoorLabel.setColor('#34d399');
     this.cameras.main.shake(220, 0.006);
   }
 
   public update(time: number, delta: number): void {
-    if (this.transitioningSector) return;
+    if (this.runOutcome !== 'PLAYING') return;
 
     const dt = delta / 1000;
 
-    // Regeneratie van Bio-Energy & afkoelen van Heat
     const regenRate = 6 + (this.equipped.INJECTOR?.stats.energyRegenBonus ?? 0);
     this.energy = Math.min(this.baseMaxEnergy, this.energy + regenRate * dt);
 
@@ -598,7 +667,6 @@ export class ArenaScene extends Phaser.Scene {
       this.heat = Math.max(0, this.heat - 3.5 * dt);
     }
 
-    // Beweging (WASD / Pijltjes)
     let vx = 0;
     let vy = 0;
     if (this.wasd.A.isDown || this.cursors.left.isDown) vx -= 1;
@@ -614,17 +682,14 @@ export class ArenaScene extends Phaser.Scene {
       this.playerBody.setVelocity(0, 0);
     }
 
-    // SPATIE = Phase Dodge
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.tryPhaseDodge(time, vx, vy);
     }
 
-    // E = Meltdown Ultimate
     if (Phaser.Input.Keyboard.JustDown(this.eKey)) {
       this.tryActivateMeltdown(time);
     }
 
-    // Auto-fire als linkermuisknop ingedrukt blijft
     if (this.input.activePointer.leftButtonDown()) {
       this.tryBioShot(this.input.activePointer);
     }
@@ -632,7 +697,7 @@ export class ArenaScene extends Phaser.Scene {
     this.updateProjectiles(time);
     this.updateEnemies(time);
     this.updateLootPickups();
-    this.checkExitDoorTransition();
+    this.checkExitDoorCompletion();
     this.drawMinimap();
 
     if (time - this.lastHudPush > 90) {
@@ -755,7 +820,6 @@ export class ArenaScene extends Phaser.Scene {
         continue;
       }
 
-      // Check muurbotsing
       let hitWall = false;
       for (const rect of this.wallRects) {
         if (rect.contains(p.sprite.x, p.sprite.y)) {
@@ -802,9 +866,16 @@ export class ArenaScene extends Phaser.Scene {
             this.hp = Math.max(0, this.hp - e.damage);
             this.cameras.main.shake(100, 0.004);
             if (this.hp <= 0) {
-              // Respawn op start van huidige sector bij dood
-              this.hp = this.getMaxHp();
-              this.player.setPosition(280, 280);
+              this.hp = 0;
+              this.runOutcome = 'WIPE';
+              this.playerBody.setVelocity(0, 0);
+              for (const enemy of this.enemies) {
+                enemy.body.setVelocity(0, 0);
+              }
+              this.cameras.main.shake(300, 0.01);
+              this.cameras.main.flash(300, 185, 28, 28);
+              this.pushHud(true);
+              return;
             }
           }
         }
@@ -818,8 +889,7 @@ export class ArenaScene extends Phaser.Scene {
     const e = this.enemies[index];
     if (!e) return;
     e.hp -= amount;
-    const ratio = Math.max(0, e.hp / e.maxHp);
-    e.hpBar.scaleX = ratio;
+    e.hpBar.scaleX = Math.max(0, e.hp / e.maxHp);
 
     if (e.hp <= 0) {
       const { x, y } = e.sprite;
@@ -829,9 +899,12 @@ export class ArenaScene extends Phaser.Scene {
 
       e.sprite.destroy();
       this.enemies.splice(index, 1);
+
+      this.dungeonStats.kills += 1;
+      this.dungeonStats.xpEarned += xpReward;
       this.grantXp(xpReward);
 
-      // Schaarse loot: 6% normale vijanden, 12% bazen/elites (2x kans)
+      // Schaarse loot: 6% gewone vijanden, 12% bazen/elites
       const baseDropChance = 0.06;
       const dropChance = wasBoss || wasElite ? baseDropChance * 2 : baseDropChance;
       if (Math.random() < dropChance) {
@@ -845,26 +918,26 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private spawnLootOrb(x: number, y: number, fromBoss: boolean): void {
-    const roll = Math.random();
+  private createLootItem(fromBoss: boolean): LootItem {
+    const roll = Math.random() + this.activeDungeon.rareBonusChance * 0.4;
     const rarity: ItemRarity = fromBoss
-      ? roll < 0.35
+      ? roll > 0.72
         ? 'EXOTIC'
         : 'RARE'
-      : roll < 0.08
+      : roll > 0.94
       ? 'EXOTIC'
-      : roll < 0.35
+      : roll > 0.65
       ? 'RARE'
       : 'COMMON';
 
     const slots: ItemSlot[] = ['WEAPON', 'ARMOR', 'INJECTOR'];
     const slot = Phaser.Utils.Array.GetRandom(slots);
-    const mult = rarity === 'EXOTIC' ? 2.4 : rarity === 'RARE' ? 1.6 : 1;
+    const tierScale = 1 + (this.activeDungeon.enemyMultiplier - 1) * 0.35;
+    const mult = (rarity === 'EXOTIC' ? 2.4 : rarity === 'RARE' ? 1.6 : 1) * tierScale;
 
-    let item: LootItem;
     if (slot === 'WEAPON') {
       const dmg = Math.round(6 * mult);
-      item = {
+      return {
         id: `loot-${Date.now()}-${Math.random()}`,
         name: rarity === 'EXOTIC' ? 'Helios Isotope Cannon' : rarity === 'RARE' ? 'Overcharged Bio-Emitter' : 'Scrap Plasma Emitter',
         slot,
@@ -872,9 +945,10 @@ export class ArenaScene extends Phaser.Scene {
         description: `+${dmg} Bio-Shot Damage`,
         stats: { damageBonus: dmg },
       };
-    } else if (slot === 'ARMOR') {
+    }
+    if (slot === 'ARMOR') {
       const hpBonus = Math.round(30 * mult);
-      item = {
+      return {
         id: `loot-${Date.now()}-${Math.random()}`,
         name: rarity === 'EXOTIC' ? 'Aegis Chitin Exo-Suit' : rarity === 'RARE' ? 'Reinforced Kevlar Weave' : 'Polymer Carapace',
         slot,
@@ -882,19 +956,21 @@ export class ArenaScene extends Phaser.Scene {
         description: `+${hpBonus} Max Vitality (HP)`,
         stats: { maxHpBonus: hpBonus },
       };
-    } else {
-      const regen = Math.round(4 * mult);
-      item = {
-        id: `loot-${Date.now()}-${Math.random()}`,
-        name: rarity === 'EXOTIC' ? 'Apex Adrenal Splicer' : rarity === 'RARE' ? 'Catalytic Bio-Injector' : 'Basic Glucose Syringe',
-        slot,
-        rarity,
-        description: `+${regen}/s Bio-Energy Regen`,
-        stats: { energyRegenBonus: regen },
-      };
     }
+    const regen = Math.round(4 * mult);
+    return {
+      id: `loot-${Date.now()}-${Math.random()}`,
+      name: rarity === 'EXOTIC' ? 'Apex Adrenal Splicer' : rarity === 'RARE' ? 'Catalytic Bio-Injector' : 'Basic Glucose Syringe',
+      slot,
+      rarity,
+      description: `+${regen}/s Bio-Energy Regen`,
+      stats: { energyRegenBonus: regen },
+    };
+  }
 
-    const orbColor = rarity === 'EXOTIC' ? 0xf59e0b : rarity === 'RARE' ? 0x38bdf8 : 0x10b981;
+  private spawnLootOrb(x: number, y: number, fromBoss: boolean): void {
+    const item = this.createLootItem(fromBoss);
+    const orbColor = item.rarity === 'EXOTIC' ? 0xf59e0b : item.rarity === 'RARE' ? 0x38bdf8 : 0x10b981;
     const outer = this.add.circle(0, 0, 13, orbColor, 0.28);
     const core = this.add.circle(0, 0, 6, orbColor, 1);
     const orb = this.add.container(x, y, [outer, core]);
@@ -917,6 +993,7 @@ export class ArenaScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, drop.sprite.x, drop.sprite.y) <= 34) {
         if (this.inventory.length < 12) {
           this.inventory.push(drop.item);
+          this.dungeonStats.lootFound += 1;
           drop.sprite.destroy();
           this.lootDrops.splice(i, 1);
           this.pushHud(true);
@@ -925,17 +1002,29 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private checkExitDoorTransition(): void {
-    if (!this.exitDoorOpen || this.transitioningSector) return;
+  private checkExitDoorCompletion(): void {
+    if (!this.exitDoorOpen || this.runOutcome !== 'PLAYING') return;
     if (this.exitDoorZone.contains(this.player.x, this.player.y)) {
-      this.transitioningSector = true;
-      this.sectorNumber += 1;
-      this.hp = Math.min(this.getMaxHp(), this.hp + 30);
-      this.cameras.main.fadeOut(320, 6, 10, 18);
-      this.time.delayedCall(340, () => {
-        this.buildProceduralSector(false);
-        this.cameras.main.fadeIn(320, 6, 10, 18);
-      });
+      this.runOutcome = 'VICTORY';
+      this.dungeonsClearedTotal += 1;
+      this.playerBody.setVelocity(0, 0);
+      for (const e of this.enemies) {
+        e.body.setVelocity(0, 0);
+      }
+
+      // Gegarandeerde Boss Chest beloning + bonus XP voor het voltooien van de dungeon
+      const completionXp = Math.round(180 * this.activeDungeon.enemyMultiplier);
+      this.dungeonStats.xpEarned += completionXp;
+      this.grantXp(completionXp);
+
+      const reward = this.createLootItem(true);
+      this.bossRewardItem = reward;
+      if (this.inventory.length < 12) {
+        this.inventory.push(reward);
+        this.dungeonStats.lootFound += 1;
+      }
+
+      this.pushHud(true);
     }
   }
 
@@ -966,23 +1055,19 @@ export class ArenaScene extends Phaser.Scene {
     this.minimapGraphics.lineStyle(1, 0x334155, 1);
     this.minimapGraphics.strokeRect(ox, oy, mapW, mapH);
 
-    // Muren op minimap
     this.minimapGraphics.fillStyle(0x475569, 0.9);
     for (const r of this.wallRects) {
       this.minimapGraphics.fillRect(ox + r.x * sx, oy + r.y * sy, Math.max(2, r.width * sx), Math.max(2, r.height * sy));
     }
 
-    // Vijanden & Boss
     for (const e of this.enemies) {
       this.minimapGraphics.fillStyle(e.isBoss ? 0xfacc15 : 0xf43f5e, 1);
       this.minimapGraphics.fillCircle(ox + e.sprite.x * sx, oy + e.sprite.y * sy, e.isBoss ? 4 : 2);
     }
 
-    // Deur bij Point B (rood = dicht, groen = open)
     this.minimapGraphics.fillStyle(this.exitDoorOpen ? 0x10b981 : 0xef4444, 1);
     this.minimapGraphics.fillRect(ox + 2520 * sx - 4, oy + 1860 * sy - 4, 8, 8);
 
-    // Speler
     this.minimapGraphics.fillStyle(0x38bdf8, 1);
     this.minimapGraphics.fillCircle(ox + this.player.x * sx, oy + this.player.y * sy, 3);
   }
@@ -1005,12 +1090,16 @@ export class ArenaScene extends Phaser.Scene {
       xpToNext: this.xpToNext,
       level: this.level,
       dnaPoints: this.dnaPoints,
-      packNumber: this.sectorNumber,
+      activeDungeon: this.activeDungeon,
+      dungeonsClearedTotal: this.dungeonsClearedTotal,
       enemiesRemaining: this.enemies.length,
       cooldowns: { slam: slamCd, dash: dodgeCd },
       upgrades: { ...this.upgrades },
       equipped: { ...this.equipped },
       inventory: [...this.inventory],
+      runOutcome: this.runOutcome,
+      bossRewardItem: this.bossRewardItem,
+      dungeonStats: { ...this.dungeonStats },
     });
   }
 }
