@@ -77,6 +77,7 @@ export default function App() {
       height: 680,
       backgroundColor: '#0b101b',
       pixelArt: true,
+      physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
       scene: [arenaScene],
       scale: {
         mode: Phaser.Scale.FIT,
