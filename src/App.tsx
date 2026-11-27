@@ -10,7 +10,7 @@ import {
 
 // â”€â”€â”€ Initial HUD state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-const initialHud: HudSnapshot = {
+const initialHud: type HudSnapshot = {
   hp: 150, maxHp: 150,
   energy: 100, maxEnergy: 100,
   heat: 20, meltdownActive: false,
@@ -31,7 +31,7 @@ export function App() {
   // Keep a ref to the Phaser.Game instance so React StrictMode's double-invoke
   // doesn't create two games (the cleanup destroys the first, guard blocks a third).
   const gameRef = useRef<Phaser.Game | null>(null);
-  const [hud, setHud] = useState<HudSnapshot>(initialHud);
+  const [hud, setHud] = useState<type HudSnapshot>(initialHud);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -60,7 +60,7 @@ export function App() {
     };
   }, []);
 
-  const handleSplice  = (stat: keyof SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
+  const handleSplice  = (stat: keyof type SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
   const handleEquip   = (id: number) => sceneRef.current?.equipItem(id);
   const handleSalvage = (id: number) => sceneRef.current?.salvageItem(id);
 
@@ -158,7 +158,7 @@ export function App() {
               SOMATIC GEAR (EQUIPPED)
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {(['WEAPON', 'ARMOR', 'INJECTOR'] as ItemSlot[]).map(slot => (
+              {(['WEAPON', 'ARMOR', 'INJECTOR'] as type ItemSlot[]).map(slot => (
                 <GearSlot key={slot} slot={slot} item={hud.equipped[slot]} />
               ))}
             </div>
@@ -248,10 +248,10 @@ function MutationNode({ title, rank, desc, canUpgrade, onUpgrade, accent }: {
   );
 }
 
-const SLOT_ICON: Record<ItemSlot, string> = { WEAPON: 'âš”', ARMOR: 'ðŸ›¡', INJECTOR: 'ðŸ’‰' };
+const SLOT_ICON: Record<type ItemSlot, string> = { WEAPON: 'âš”', ARMOR: 'ðŸ›¡', INJECTOR: 'ðŸ’‰' };
 const RARITY_CSS: Record<string, string> = { COMMON: '#94a3b8', RARE: '#60a5fa', EXOTIC: '#f59e0b' };
 
-function GearSlot({ slot, item }: { slot: ItemSlot; item?: LootItem }) {
+function GearSlot({ slot, item }: { slot: type ItemSlot; item?: type LootItem }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1e293b', borderRadius: '6px', padding: '7px 10px', border: '1px solid #334155' }}>
       <span style={{ fontSize: '16px', width: '20px', textAlign: 'center' }}>{SLOT_ICON[slot]}</span>
@@ -272,7 +272,7 @@ function GearSlot({ slot, item }: { slot: ItemSlot; item?: LootItem }) {
 }
 
 function InventoryRow({ item, onEquip, onSalvage }: {
-  item: LootItem; onEquip: (id: number) => void; onSalvage: (id: number) => void;
+  item: type LootItem; onEquip: (id: number) => void; onSalvage: (id: number) => void;
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#1e293b', borderRadius: '6px', padding: '5px 8px', border: `1px solid ${RARITY_CSS[item.rarity]}44` }}>
