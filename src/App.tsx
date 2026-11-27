@@ -60,7 +60,7 @@ export function App() {
     };
   }, []);
 
-  const handleSplice  = (stat: keyof type SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
+  const handleSplice  = (stat: keyof SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
   const handleEquip   = (id: number) => sceneRef.current?.equipItem(id);
   const handleSalvage = (id: number) => sceneRef.current?.salvageItem(id);
 
