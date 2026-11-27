@@ -1340,3 +1340,6 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 }
+
+export const HudSnapshot = null as unknown as HudSnapshot;
+export const SomaticUpgrades = null as unknown as SomaticUpgrades;
