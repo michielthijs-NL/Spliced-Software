@@ -582,7 +582,7 @@ export class ArenaScene extends Phaser.Scene {
       // Magnetic attraction at 160px
       if (dist < 160 && dist > 1) {
         const angle = Math.atan2(this.player.y - lo.orb.y, this.player.x - lo.orb.x);
-        const pull  = Phaser.Math.Lerp(0, 420, 1 - dist / 160);
+        const pull  = Phaser.Math.Linear(0, 420, 1 - dist / 160);
         const nx = lo.orb.x + Math.cos(angle) * pull * dt;
         const ny = lo.orb.y + Math.sin(angle) * pull * dt;
         lo.orb.setPosition(nx, ny);
