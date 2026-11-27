@@ -28,26 +28,36 @@ const initialHud: HudSnapshot = {
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef     = useRef<ArenaScene | null>(null);
+  // Keep a ref to the Phaser.Game instance so React StrictMode's double-invoke
+  // doesn't create two games (the cleanup destroys the first, guard blocks a third).
+  const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(initialHud);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    // Strict-mode guard: if a game already exists for this mount, skip
+    if (gameRef.current) return;
 
     const arenaScene = new ArenaScene();
     arenaScene.setHudCallback((snapshot) => setHud(snapshot));
     sceneRef.current = arenaScene;
 
-    const game = new Phaser.Game({
+    gameRef.current = new Phaser.Game({
       type: Phaser.AUTO,
       width: 960,
       height: 680,
+      backgroundColor: '#0b101b',   // set at renderer level, not just camera
       parent: containerRef.current,
       pixelArt: true,
       physics: { default: 'arcade', arcade: { debug: false } },
       scene: [arenaScene],
     });
 
-    return () => { game.destroy(true); };
+    return () => {
+      gameRef.current?.destroy(true);
+      gameRef.current = null;
+      sceneRef.current = null;
+    };
   }, []);
 
   const handleSplice  = (stat: keyof SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);

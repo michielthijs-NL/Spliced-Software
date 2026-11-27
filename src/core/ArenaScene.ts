@@ -240,8 +240,9 @@ export class ArenaScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#0b101b');
     this.generatePixelArtTextures();
 
-    // Tiled dungeon floor
-    this.add.tileSprite(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 'dungeon_tile').setDepth(0);
+    // Tiled dungeon floor (use '__DEFAULT' fallback if texture creation failed)
+    const floorKey = this.textures.exists('dungeon_tile') ? 'dungeon_tile' : '__DEFAULT';
+    this.add.tileSprite(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, floorKey).setDepth(0);
 
     this.buildDungeonLayout();
 
@@ -251,7 +252,9 @@ export class ArenaScene extends Phaser.Scene {
 
     // Player
     this.playerShadow = this.add.ellipse(460, 474, 24, 10, 0x020617, 0.65).setDepth(9);
-    this.player       = this.add.sprite(460, 460, 'player_pixel').setScale(2).setDepth(10);
+    this.player = this.add.sprite(460, 460,
+      this.textures.exists('player_pixel') ? 'player_pixel' : '__DEFAULT'
+    ).setScale(2).setDepth(10);
 
     // Camera
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -393,18 +396,21 @@ export class ArenaScene extends Phaser.Scene {
     if (this.textures.exists('dungeon_tile')) return;
 
     // 48×48 dungeon floor tile
-    const tileCanvas = this.textures.createCanvas('dungeon_tile', 48, 48)!;
-    const tCtx = tileCanvas.getContext();
-    tCtx.fillStyle = '#16202e'; tCtx.fillRect(0, 0, 48, 48);
-    tCtx.fillStyle = '#0f1722'; tCtx.fillRect(0, 46, 48, 2); tCtx.fillRect(46, 0, 2, 48);
-    tCtx.fillStyle = '#1e2b3d'; tCtx.fillRect(0, 0, 46, 2); tCtx.fillRect(0, 0, 2, 46);
-    tCtx.strokeStyle = '#111926'; tCtx.lineWidth = 2; tCtx.strokeRect(10, 10, 26, 26);
-    tCtx.strokeStyle = '#223145'; tCtx.strokeRect(12, 12, 22, 22);
-    tileCanvas.refresh();
+    const tileCanvas = this.textures.createCanvas('dungeon_tile', 48, 48);
+    if (tileCanvas) {
+      const tCtx = tileCanvas.getContext();
+      tCtx.fillStyle = '#16202e'; tCtx.fillRect(0, 0, 48, 48);
+      tCtx.fillStyle = '#0f1722'; tCtx.fillRect(0, 46, 48, 2); tCtx.fillRect(46, 0, 2, 48);
+      tCtx.fillStyle = '#1e2b3d'; tCtx.fillRect(0, 0, 46, 2); tCtx.fillRect(0, 0, 2, 46);
+      tCtx.strokeStyle = '#111926'; tCtx.lineWidth = 2; tCtx.strokeRect(10, 10, 26, 26);
+      tCtx.strokeStyle = '#223145'; tCtx.strokeRect(12, 12, 22, 22);
+      tileCanvas.refresh();
+    }
 
     const makePixelSprite = (key: string, grid: string[], palette: Record<string, string>) => {
       const h = grid.length, w = grid[0].length;
-      const c = this.textures.createCanvas(key, w, h)!;
+      const c = this.textures.createCanvas(key, w, h);
+      if (!c) return;
       const ctx = c.getContext();
       for (let y = 0; y < h; y++)
         for (let x = 0; x < w; x++) {
@@ -886,6 +892,7 @@ export class ArenaScene extends Phaser.Scene {
     scale: number
   ) {
     const texture     = isBoss ? 'boss_warden' : isElite ? 'enemy_elite' : 'enemy_minion';
+    const safeTexture = this.textures.exists(texture) ? texture : '__DEFAULT';
     const spriteScale = isBoss ? 3.2 : isElite ? 2.1 : 1.9;
 
     const shadow = this.add
@@ -901,7 +908,7 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
 
-    const sprite = this.add.sprite(x, y, texture).setScale(spriteScale).setDepth(10);
+    const sprite = this.add.sprite(x, y, safeTexture).setScale(spriteScale).setDepth(10);
     const barW   = isBoss ? 96 : isElite ? 48 : 30;
 
     const hpBarBg   = this.add.rectangle(x, y - 24, barW, 5, 0x0f172a).setDepth(15);
