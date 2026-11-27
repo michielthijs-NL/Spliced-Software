@@ -4,7 +4,8 @@ import {
   ArenaScene,
   DUNGEONS,
   type HudSnapshot,
-  type SkillTree,
+  type SkillKey,
+  type SupportGemId,
   type LootItem,
   type ItemSlot,
   type ItemRarity,
@@ -27,7 +28,10 @@ const initialHud: HudSnapshot = {
   worldTier: 1,
   enemiesRemaining: 19,
   manaCosts: { slam: 25, dodge: 20 },
-  skills: { bioShot: 1, phaseDodge: 1, coneSlam: 0, meltdownUlt: 0 },
+  skills: {
+    unlocked: { bioShot: true, phaseDodge: true, coneSlam: false, meltdownUlt: false },
+    sockets: { bioShot: [], phaseDodge: [], coneSlam: [], meltdownUlt: [] },
+  },
   equipped: { WEAPON: null, ARMOR: null, INJECTOR: null },
   inventory: [],
   runOutcome: 'PLAYING',
@@ -88,21 +92,93 @@ const slotMeta: Record<ItemSlot, { label: string; icon: string }> = {
   INJECTOR: { label: 'Splicer Injector', icon: '\uD83D\uDC89' },
 };
 
+const SUPPORT_GEMS: {
+  id: SupportGemId;
+  name: string;
+  tag: string;
+  desc: string;
+  color: string;
+  compatible: SkillKey[];
+}[] = [
+  {
+    id: 'scatterSplit',
+    name: 'Scatter Split',
+    tag: 'PROJECTILE',
+    desc: '+2 Extra Projectiles in een waaier',
+    color: '#38bdf8',
+    compatible: ['bioShot'],
+  },
+  {
+    id: 'highVelocity',
+    name: 'High-Velocity Reach',
+    tag: 'PROJECTILE',
+    desc: '+55% Bereik & Projectielsnelheid',
+    color: '#38bdf8',
+    compatible: ['bioShot'],
+  },
+  {
+    id: 'magnifiedArea',
+    name: 'Magnified Area',
+    tag: 'AOE',
+    desc: '+45% AoE Radius & Kegelhoek',
+    color: '#f43f5e',
+    compatible: ['coneSlam', 'phaseDodge', 'meltdownUlt'],
+  },
+  {
+    id: 'seismicEcho',
+    name: 'Seismic Echo',
+    tag: 'AOE / DURATION',
+    desc: 'Tweede schokgolf (65% DMG) of +2s Meltdown',
+    color: '#f59e0b',
+    compatible: ['coneSlam', 'phaseDodge', 'meltdownUlt'],
+  },
+  {
+    id: 'brutalOvercharge',
+    name: 'Brutal Overcharge',
+    tag: 'DAMAGE',
+    desc: '+40% Schade, maar +8 Mana-kost',
+    color: '#fb7185',
+    compatible: ['bioShot', 'coneSlam', 'phaseDodge', 'meltdownUlt'],
+  },
+  {
+    id: 'essenceEfficiency',
+    name: 'Essence Efficiency',
+    tag: 'MANA',
+    desc: '-35% Mana-kost & +4 Mana per Bio-Shot',
+    color: '#2dd4bf',
+    compatible: ['bioShot', 'coneSlam', 'phaseDodge'],
+  },
+  {
+    id: 'vampiricSiphon',
+    name: 'Vampiric Siphon',
+    tag: 'SUSTAIN',
+    desc: 'Herstelt HP bij geraakte vijanden',
+    color: '#34d399',
+    compatible: ['coneSlam', 'phaseDodge', 'meltdownUlt'],
+  },
+  {
+    id: 'volatileCatalyst',
+    name: 'Volatile Catalyst',
+    tag: 'CRIT / HEAT',
+    desc: '+100% Heat-opbouw & 25% Crit (2x DMG)',
+    color: '#c084fc',
+    compatible: ['bioShot', 'coneSlam'],
+  },
+];
+
 const HELIX_SKILLS: {
-  key: keyof SkillTree;
+  key: SkillKey;
   hotkey: string;
   baseName: string;
-  unlockDesc: string;
-  evolveDesc: string;
+  baseDesc: string;
   color: string;
   strand: 'LEFT' | 'RIGHT';
 }[] = [
   {
     key: 'bioShot',
     hotkey: '[LMB]',
-    baseName: 'Bio-Shot (Short-Range)',
-    unlockDesc: 'Standaard kort-afstand bio-projectiel (+8 Mana per hit).',
-    evolveDesc: 'Rank 2: vuurt 3 projectielen in een waaier. Rank 3+: 5 projectielen + hogere schade.',
+    baseName: 'Bio-Shot',
+    baseDesc: 'Kort-afstand bio-projectiel (+8 Mana per hit).',
     color: '#38bdf8',
     strand: 'LEFT',
   },
@@ -110,8 +186,7 @@ const HELIX_SKILLS: {
     key: 'coneSlam',
     hotkey: '[RMB]',
     baseName: 'Cone-Slam',
-    unlockDesc: 'ONTGRENDEL SKILL (Rank 1): Slaat een krachtige 76° kegel-schokgolf richting je cursor.',
-    evolveDesc: 'Rank 2+: wekt na 0.2s een tweede grotere Seismic Aftershock cone op en verlaagt mana-kost.',
+    baseDesc: '76° kegel-schokgolf richting je muiscursor.',
     color: '#fb7185',
     strand: 'RIGHT',
   },
@@ -119,17 +194,15 @@ const HELIX_SKILLS: {
     key: 'phaseDodge',
     hotkey: '[SPATIE]',
     baseName: 'Phase Dodge',
-    unlockDesc: 'Standaard ontwijk-dash met korte onkwetsbaarheid.',
-    evolveDesc: 'Rank 2+: laat een explosieve Plasma-Nova achter bij je vertrekpunt + hogere loopsnelheid.',
+    baseDesc: 'Snelle dash met korte onkwetsbaarheid.',
     color: '#2dd4bf',
     strand: 'LEFT',
   },
   {
     key: 'meltdownUlt',
     hotkey: '[E]',
-    baseName: 'Meltdown Ultimate',
-    unlockDesc: 'ONTGRENDEL SKILL (Rank 1): Activeert nucleaire stralingsaura vanaf 80% Heat.',
-    evolveDesc: 'Rank 2+: vergroot de aura (+38px), verlengt duur en heelt HP terwijl vijanden branden.',
+    baseName: 'Meltdown Ult',
+    baseDesc: 'Nucleaire aura vanaf 80% Heat.',
     color: '#fb923c',
     strand: 'RIGHT',
   },
@@ -140,6 +213,7 @@ export default function App() {
   const sceneRef = useRef<ArenaScene | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(initialHud);
   const [activeModal, setActiveModal] = useState<'none' | 'inventory' | 'skills'>('none');
+  const [selectedSkillKey, setSelectedSkillKey] = useState<SkillKey | null>(null);
   const [showWorldMap, setShowWorldMap] = useState<boolean>(true);
   const [selectedDungeonId, setSelectedDungeonId] = useState<string>(DUNGEONS[0].id);
 
@@ -148,11 +222,14 @@ export default function App() {
       const k = e.key.toLowerCase();
       if (k === 'i') {
         e.preventDefault();
+        setSelectedSkillKey(null);
         setActiveModal((prev) => (prev === 'inventory' ? 'none' : 'inventory'));
       } else if (k === 'k') {
         e.preventDefault();
+        setSelectedSkillKey(null);
         setActiveModal((prev) => (prev === 'skills' ? 'none' : 'skills'));
       } else if (e.key === 'Escape') {
+        setSelectedSkillKey(null);
         setActiveModal('none');
       }
     };
@@ -190,12 +267,14 @@ export default function App() {
 
   const handleEnterDungeon = (dungeonId: string) => {
     setSelectedDungeonId(dungeonId);
+    setSelectedSkillKey(null);
     setActiveModal('none');
     setShowWorldMap(false);
     sceneRef.current?.startDungeon(dungeonId);
   };
 
-  const handleUpgradeSkill = (skill: keyof SkillTree) => sceneRef.current?.upgradeSkill(skill);
+  const handleUnlockSkill = (skill: SkillKey) => sceneRef.current?.unlockSkill(skill);
+  const handleSocketSupport = (skill: SkillKey, gem: SupportGemId) => sceneRef.current?.socketSupport(skill, gem);
   const handleEquip = (itemId: string) => sceneRef.current?.equipItem(itemId);
   const handleSalvage = (itemId: string) => sceneRef.current?.salvageItem(itemId);
 
@@ -234,6 +313,7 @@ export default function App() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={() => {
+                setSelectedSkillKey(null);
                 setActiveModal('none');
                 setShowWorldMap(true);
               }}
@@ -252,7 +332,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveModal((prev) => (prev === 'inventory' ? 'none' : 'inventory'))}
+              onClick={() => {
+                setSelectedSkillKey(null);
+                setActiveModal((prev) => (prev === 'inventory' ? 'none' : 'inventory'));
+              }}
               style={{
                 backgroundColor: activeModal === 'inventory' ? '#0369a1' : '#0f172a',
                 border: `1px solid ${activeModal === 'inventory' ? '#38bdf8' : '#334155'}`,
@@ -272,7 +355,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveModal((prev) => (prev === 'skills' ? 'none' : 'skills'))}
+              onClick={() => {
+                setSelectedSkillKey(null);
+                setActiveModal((prev) => (prev === 'skills' ? 'none' : 'skills'));
+              }}
               style={{
                 backgroundColor: hud.dnaPoints > 0 ? '#0f766e' : activeModal === 'skills' ? '#115e59' : '#0f172a',
                 border: `1px solid ${hud.dnaPoints > 0 || activeModal === 'skills' ? '#2dd4bf' : '#334155'}`,
@@ -628,7 +714,10 @@ export default function App() {
                           Gear &amp; Rugzak [I]
                         </button>
                         <button
-                          onClick={() => setActiveModal('skills')}
+                          onClick={() => {
+                            setSelectedSkillKey(null);
+                            setActiveModal('skills');
+                          }}
                           style={{
                             backgroundColor: '#1e293b',
                             color: '#5eead4',
@@ -879,13 +968,13 @@ export default function App() {
             </div>
           )}
 
-          {/* [K] DNA-STRING SKILL TREE MODAL (ENIGE LEVEL-UP BESTEMMING) */}
+          {/* [K] POE2-STIJL DNA SKILL HELIX & SKILL SUBMENU */}
           {activeModal === 'skills' && (
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(6, 10, 18, 0.90)',
+                backgroundColor: 'rgba(6, 10, 18, 0.92)',
                 backdropFilter: 'blur(7px)',
                 borderRadius: 12,
                 padding: 20,
@@ -898,7 +987,7 @@ export default function App() {
               <div
                 style={{
                   width: '100%',
-                  maxWidth: 900,
+                  maxWidth: 920,
                   backgroundColor: '#0f172a',
                   border: '1px solid #2dd4bf66',
                   borderRadius: 16,
@@ -913,218 +1002,336 @@ export default function App() {
                     alignItems: 'center',
                     borderBottom: '1px solid #1e293b',
                     paddingBottom: 10,
-                    marginBottom: 16,
+                    marginBottom: 14,
                   }}
                 >
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 900, color: '#2dd4bf' }}>
-                      GENETIC SKILL HELIX &bull; LEVEL {hud.level} SKILL PROGRESSIE
+                      {selectedSkillKey
+                        ? `SKILL SOCKETS // ${HELIX_SKILLS.find((s) => s.key === selectedSkillKey)?.baseName.toUpperCase()} (MAX 3 UPGRADES)`
+                        : `GENETIC SKILL HELIX • LEVEL ${hud.level}`}
                     </div>
                     <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 2 }}>
-                      Beschikbare DNA Punten: <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull; XP:{' '}
-                      {hud.xp} / {hud.xpToNext} &bull; Ontgrendel &amp; evolueer je skills via DNA
+                      Beschikbare DNA Punten: <strong style={{ color: '#facc15' }}>{hud.dnaPoints}</strong> &bull; Elke skill
+                      heeft max. 3 sockets en elke Support-Mutatie is uniek over alle skills
                     </div>
                   </div>
-                  <button
-                    onClick={() => setActiveModal('none')}
-                    style={{
-                      backgroundColor: '#1e293b',
-                      color: '#e2e8f0',
-                      border: '1px solid #334155',
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Sluiten [K / ESC]
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {selectedSkillKey && (
+                      <button
+                        onClick={() => setSelectedSkillKey(null)}
+                        style={{
+                          backgroundColor: '#0f766e',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 6,
+                          padding: '5px 12px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        &larr; Terug naar Helix
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedSkillKey(null);
+                        setActiveModal('none');
+                      }}
+                      style={{
+                        backgroundColor: '#1e293b',
+                        color: '#e2e8f0',
+                        border: '1px solid #334155',
+                        borderRadius: 6,
+                        padding: '5px 10px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Sluiten [K / ESC]
+                    </button>
+                  </div>
                 </div>
 
-                {/* 3-Koloms DNA-String Layout */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', gap: 14, alignItems: 'center' }}>
-                  {/* Linker DNA-streng (Bio-Shot & Phase Dodge) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {HELIX_SKILLS.filter((s) => s.strand === 'LEFT').map((sk) => {
-                      const rank = hud.skills[sk.key];
-                      const isUnlocked = rank > 0;
-                      return (
-                        <div
-                          key={sk.key}
-                          style={{
-                            border: `1px solid ${isUnlocked ? sk.color : '#334155'}`,
-                            backgroundColor: isUnlocked ? 'rgba(15, 118, 110, 0.22)' : '#090d16',
-                            borderRadius: 12,
-                            padding: 13,
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 11, fontFamily: 'monospace', color: sk.color, fontWeight: 700 }}>
-                              {sk.hotkey} {sk.baseName.toUpperCase()}
-                            </span>
-                            <span
+                {!selectedSkillKey ? (
+                  /* HOOFDSCHERM: DE 4 SKILLS OP DE DNA-HELIX */
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 14, alignItems: 'center' }}>
+                    {(['LEFT', 'RIGHT'] as const).map((side, colIdx) => (
+                      <div
+                        key={side}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 14, gridColumn: colIdx === 0 ? 1 : 3 }}
+                      >
+                        {HELIX_SKILLS.filter((s) => s.strand === side).map((sk) => {
+                          const unlocked = hud.skills.unlocked[sk.key];
+                          const sockets = hud.skills.sockets[sk.key];
+                          return (
+                            <div
+                              key={sk.key}
                               style={{
-                                fontSize: 10,
-                                fontWeight: 800,
-                                padding: '2px 7px',
-                                borderRadius: 999,
-                                backgroundColor: isUnlocked ? sk.color : '#1e293b',
-                                color: isUnlocked ? '#060a12' : '#94a3b8',
+                                border: `1px solid ${unlocked ? sk.color : '#334155'}`,
+                                backgroundColor: unlocked ? 'rgba(15, 23, 42, 0.95)' : '#090d16',
+                                borderRadius: 12,
+                                padding: 13,
                               }}
                             >
-                              {isUnlocked ? `RANK ${rank}` : 'LOCKED'}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 12, color: '#e2e8f0', marginTop: 6 }}>{sk.unlockDesc}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>{sk.evolveDesc}</div>
-                          <button
-                            onClick={() => handleUpgradeSkill(sk.key)}
-                            disabled={hud.dnaPoints <= 0}
-                            style={{
-                              marginTop: 10,
-                              width: '100%',
-                              backgroundColor: sk.color,
-                              color: '#060a12',
-                              border: 'none',
-                              borderRadius: 7,
-                              padding: '6px 10px',
-                              fontSize: 12,
-                              fontWeight: 800,
-                              cursor: hud.dnaPoints > 0 ? 'pointer' : 'not-allowed',
-                              opacity: hud.dnaPoints > 0 ? 1 : 0.35,
-                            }}
-                          >
-                            {isUnlocked ? `+ Evolueer naar Rank ${rank + 1} (1 DNA)` : 'Ontgrendel Skill (1 DNA)'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 11, fontFamily: 'monospace', color: sk.color, fontWeight: 800 }}>
+                                  {sk.hotkey} {sk.baseName.toUpperCase()}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    padding: '2px 7px',
+                                    borderRadius: 999,
+                                    backgroundColor: unlocked ? sk.color : '#1e293b',
+                                    color: unlocked ? '#060a12' : '#fb7185',
+                                  }}
+                                >
+                                  {unlocked ? `${sockets.length} / 3 SOCKETS` : 'LOCKED'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 5 }}>{sk.baseDesc}</div>
 
-                  {/* Midden: Visuele DNA Dubbele Helix SVG */}
-                  <div style={{ textAlign: 'center' }}>
-                    <svg viewBox="0 0 140 340" style={{ width: '100%', maxWidth: 140, height: 'auto' }}>
-                      <path
-                        d="M30,15 C110,65 110,115 30,170 C-10,225 110,275 30,325"
-                        fill="none"
-                        stroke="#38bdf8"
-                        strokeWidth="4"
-                      />
-                      <path
-                        d="M110,15 C30,65 30,115 110,170 C150,225 30,275 110,325"
-                        fill="none"
-                        stroke="#2dd4bf"
-                        strokeWidth="4"
-                      />
+                              {/* 3 Socket-indicatoren op de kaart */}
+                              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                                {[0, 1, 2].map((idx) => {
+                                  const gemId = sockets[idx];
+                                  const gem = SUPPORT_GEMS.find((g) => g.id === gemId);
+                                  return (
+                                    <div
+                                      key={idx}
+                                      style={{
+                                        flex: 1,
+                                        fontSize: 10,
+                                        padding: '4px 5px',
+                                        borderRadius: 6,
+                                        border: `1px dashed ${gem ? gem.color : '#334155'}`,
+                                        backgroundColor: gem ? 'rgba(30, 41, 59, 0.85)' : '#060a12',
+                                        color: gem ? gem.color : '#475569',
+                                        textAlign: 'center',
+                                        fontWeight: 700,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {gem ? gem.name : 'Leeg'}
+                                    </div>
+                                  );
+                                })}
+                              </div>
 
-                      {[35, 70, 105, 140, 170, 205, 240, 275, 308].map((y, idx) => (
-                        <line
-                          key={y}
-                          x1="34"
-                          y1={y}
-                          x2="106"
-                          y2={y}
-                          stroke={idx % 2 === 0 ? '#38bdf866' : '#2dd4bf66'}
-                          strokeWidth="2.5"
-                          strokeDasharray="4 3"
+                              {unlocked ? (
+                                <button
+                                  onClick={() => setSelectedSkillKey(sk.key)}
+                                  style={{
+                                    marginTop: 10,
+                                    width: '100%',
+                                    backgroundColor: sk.color,
+                                    color: '#060a12',
+                                    border: 'none',
+                                    borderRadius: 7,
+                                    padding: '7px 10px',
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Open Skill Submenu ({sockets.length}/3) &rarr;
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleUnlockSkill(sk.key)}
+                                  disabled={hud.dnaPoints <= 0}
+                                  style={{
+                                    marginTop: 10,
+                                    width: '100%',
+                                    backgroundColor: sk.color,
+                                    color: '#060a12',
+                                    border: 'none',
+                                    borderRadius: 7,
+                                    padding: '7px 10px',
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    cursor: hud.dnaPoints > 0 ? 'pointer' : 'not-allowed',
+                                    opacity: hud.dnaPoints > 0 ? 1 : 0.35,
+                                  }}
+                                >
+                                  Ontgrendel Skill (1 DNA)
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+
+                    <div style={{ gridColumn: 2, gridRow: 1, textAlign: 'center' }}>
+                      <svg viewBox="0 0 140 340" style={{ width: '100%', maxWidth: 135 }}>
+                        <path
+                          d="M30,15 C110,65 110,115 30,170 C-10,225 110,275 30,325"
+                          fill="none"
+                          stroke="#38bdf8"
+                          strokeWidth="4"
                         />
-                      ))}
-
-                      <circle
-                        cx="32"
-                        cy="62"
-                        r="11"
-                        fill={hud.skills.bioShot > 0 ? '#38bdf8' : '#090d16'}
-                        stroke="#38bdf8"
-                        strokeWidth="3"
-                      />
-                      <circle
-                        cx="108"
-                        cy="132"
-                        r="11"
-                        fill={hud.skills.coneSlam > 0 ? '#fb7185' : '#090d16'}
-                        stroke="#fb7185"
-                        strokeWidth="3"
-                      />
-                      <circle
-                        cx="32"
-                        cy="208"
-                        r="11"
-                        fill={hud.skills.phaseDodge > 0 ? '#2dd4bf' : '#090d16'}
-                        stroke="#2dd4bf"
-                        strokeWidth="3"
-                      />
-                      <circle
-                        cx="108"
-                        cy="278"
-                        r="11"
-                        fill={hud.skills.meltdownUlt > 0 ? '#fb923c' : '#090d16'}
-                        stroke="#fb923c"
-                        strokeWidth="3"
-                      />
-                    </svg>
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>DNA HELIX</div>
+                        <path
+                          d="M110,15 C30,65 30,115 110,170 C150,225 30,275 110,325"
+                          fill="none"
+                          stroke="#2dd4bf"
+                          strokeWidth="4"
+                        />
+                        {[45, 95, 145, 195, 245, 295].map((y) => (
+                          <line
+                            key={y}
+                            x1="34"
+                            y1={y}
+                            x2="106"
+                            y2={y}
+                            stroke="#38bdf844"
+                            strokeWidth="2"
+                            strokeDasharray="4 3"
+                          />
+                        ))}
+                        <circle
+                          cx="32"
+                          cy="65"
+                          r="11"
+                          fill={hud.skills.unlocked.bioShot ? '#38bdf8' : '#090d16'}
+                          stroke="#38bdf8"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="108"
+                          cy="135"
+                          r="11"
+                          fill={hud.skills.unlocked.coneSlam ? '#fb7185' : '#090d16'}
+                          stroke="#fb7185"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="32"
+                          cy="205"
+                          r="11"
+                          fill={hud.skills.unlocked.phaseDodge ? '#2dd4bf' : '#090d16'}
+                          stroke="#2dd4bf"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="108"
+                          cy="275"
+                          r="11"
+                          fill={hud.skills.unlocked.meltdownUlt ? '#fb923c' : '#090d16'}
+                          stroke="#fb923c"
+                          strokeWidth="3"
+                        />
+                      </svg>
+                      <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>DNA HELIX</div>
+                    </div>
                   </div>
-
-                  {/* Rechter DNA-streng (Cone-Slam & Meltdown Ult) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {HELIX_SKILLS.filter((s) => s.strand === 'RIGHT').map((sk) => {
-                      const rank = hud.skills[sk.key];
-                      const isUnlocked = rank > 0;
-                      return (
-                        <div
-                          key={sk.key}
-                          style={{
-                            border: `1px solid ${isUnlocked ? sk.color : '#334155'}`,
-                            backgroundColor: isUnlocked ? 'rgba(136, 19, 55, 0.22)' : '#090d16',
-                            borderRadius: 12,
-                            padding: 13,
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 11, fontFamily: 'monospace', color: sk.color, fontWeight: 700 }}>
-                              {sk.hotkey} {sk.baseName.toUpperCase()}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 800,
-                                padding: '2px 7px',
-                                borderRadius: 999,
-                                backgroundColor: isUnlocked ? sk.color : '#1e293b',
-                                color: isUnlocked ? '#060a12' : '#fb7185',
-                              }}
-                            >
-                              {isUnlocked ? `RANK ${rank}` : 'LOCKED'}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 12, color: '#e2e8f0', marginTop: 6 }}>{sk.unlockDesc}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>{sk.evolveDesc}</div>
-                          <button
-                            onClick={() => handleUpgradeSkill(sk.key)}
-                            disabled={hud.dnaPoints <= 0}
-                            style={{
-                              marginTop: 10,
-                              width: '100%',
-                              backgroundColor: sk.color,
-                              color: '#060a12',
-                              border: 'none',
-                              borderRadius: 7,
-                              padding: '6px 10px',
-                              fontSize: 12,
-                              fontWeight: 800,
-                              cursor: hud.dnaPoints > 0 ? 'pointer' : 'not-allowed',
-                              opacity: hud.dnaPoints > 0 ? 1 : 0.35,
-                            }}
-                          >
-                            {isUnlocked ? `+ Evolueer naar Rank ${rank + 1} (1 DNA)` : 'Ontgrendel Skill (1 DNA)'}
-                          </button>
+                ) : (
+                  /* SUBMENU VAN DE GEKOZEN SKILL: 3 SOCKETS + UNIEKE MUTATIE-POOL */
+                  (() => {
+                    const currentSockets = hud.skills.sockets[selectedSkillKey];
+                    const availableGems = SUPPORT_GEMS.filter((g) => g.compatible.includes(selectedSkillKey));
+                    return (
+                      <div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                          {[0, 1, 2].map((idx) => {
+                            const gem = SUPPORT_GEMS.find((g) => g.id === currentSockets[idx]);
+                            return (
+                              <div
+                                key={idx}
+                                style={{
+                                  border: `2px ${gem ? 'solid' : 'dashed'} ${gem ? gem.color : '#334155'}`,
+                                  backgroundColor: '#090d16',
+                                  borderRadius: 10,
+                                  padding: 10,
+                                }}
+                              >
+                                <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>
+                                  SOCKET SLOT #{idx + 1}
+                                </div>
+                                {gem ? (
+                                  <>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: gem.color, marginTop: 2 }}>
+                                      {gem.name}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#cbd5e1' }}>{gem.desc}</div>
+                                  </>
+                                ) : (
+                                  <div style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', marginTop: 6 }}>
+                                    Lege DNA-socket
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
+
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8', marginBottom: 8 }}>
+                          BESCHIKBARE SUPPORT-MUTATIES (ELKE MUTATIE IS UNIEK OVER ALLE SKILLS)
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxHeight: 250, overflowY: 'auto' }}>
+                          {availableGems.map((gem) => {
+                            const usedBySkillKey = (Object.keys(hud.skills.sockets) as SkillKey[]).find((k) =>
+                              hud.skills.sockets[k].includes(gem.id)
+                            );
+                            const usedBySkill = HELIX_SKILLS.find((s) => s.key === usedBySkillKey);
+                            const isFull = currentSockets.length >= 3;
+                            const disabled = Boolean(usedBySkill) || isFull || hud.dnaPoints <= 0;
+
+                            return (
+                              <div
+                                key={gem.id}
+                                style={{
+                                  border: `1px solid ${usedBySkill ? '#334155' : gem.color + '66'}`,
+                                  backgroundColor: usedBySkill ? '#060a12' : '#090d16',
+                                  borderRadius: 9,
+                                  padding: 10,
+                                  opacity: usedBySkill ? 0.52 : 1,
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                }}
+                              >
+                                <div>
+                                  <div style={{ fontSize: 10, fontFamily: 'monospace', color: gem.color }}>{gem.tag}</div>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff' }}>{gem.name}</div>
+                                  <div style={{ fontSize: 11, color: '#cbd5e1' }}>{gem.desc}</div>
+                                </div>
+                                <button
+                                  onClick={() => handleSocketSupport(selectedSkillKey, gem.id)}
+                                  disabled={disabled}
+                                  style={{
+                                    backgroundColor: usedBySkill ? '#1e293b' : gem.color,
+                                    color: usedBySkill ? '#94a3b8' : '#060a12',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    padding: '6px 10px',
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    cursor: disabled ? 'not-allowed' : 'pointer',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {usedBySkill
+                                    ? `In gebruik bij ${usedBySkill.baseName}`
+                                    : isFull
+                                    ? 'Vol (3/3)'
+                                    : 'Socket (1 DNA)'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
             </div>
           )}
@@ -1318,7 +1525,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Onderste Statusbalk (XP voedt direct DNA Skills [K], Cone-Slam & Meltdown tonen Locked tot vrijgespeeld) */}
+        {/* Onderste Statusbalk */}
         <footer
           style={{
             backgroundColor: '#0f172a',
@@ -1333,7 +1540,8 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 3 }}>
               <span style={{ color: '#2dd4bf' }}>
-                LEVEL {hud.level} &bull; SKILL XP PROGRESSIE {hud.dnaPoints > 0 ? `(${hud.dnaPoints} DNA PUNT KLAAR IN [K]!)` : ''}
+                LEVEL {hud.level} &bull; SKILL XP PROGRESSIE{' '}
+                {hud.dnaPoints > 0 ? `(${hud.dnaPoints} DNA PUNT KLAAR IN [K]!)` : ''}
               </span>
               <span style={{ color: '#e2e8f0' }}>
                 {hud.xp} / {hud.xpToNext} XP ({Math.round(xpPct)}%)
@@ -1363,7 +1571,9 @@ export default function App() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700 }}>
                   <span style={{ color: '#34d399' }}>VITALITY</span>
-                  <span>{hud.hp} / {hud.maxHp}</span>
+                  <span>
+                    {hud.hp} / {hud.maxHp}
+                  </span>
                 </div>
                 <div style={{ height: 7, backgroundColor: '#1e293b', borderRadius: 999, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${hpPct}%`, backgroundColor: '#10b981' }} />
@@ -1372,7 +1582,9 @@ export default function App() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700 }}>
                   <span style={{ color: '#38bdf8' }}>BIO-ENERGY (MANA)</span>
-                  <span>{hud.energy} / {hud.maxEnergy}</span>
+                  <span>
+                    {hud.energy} / {hud.maxEnergy}
+                  </span>
                 </div>
                 <div style={{ height: 7, backgroundColor: '#1e293b', borderRadius: 999, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${energyPct}%`, backgroundColor: '#0ea5e9' }} />
@@ -1385,20 +1597,26 @@ export default function App() {
                 {
                   key: '[LMB]',
                   name: 'Bio-Shot',
-                  sub: `Rk ${hud.skills.bioShot} (+8 Mana)`,
+                  sub: `${hud.skills.sockets.bioShot.length}/3 Gems`,
                   color: '#38bdf8',
                   locked: false,
                   active: false,
-                  onClick: undefined,
+                  onClick: () => {
+                    setSelectedSkillKey('bioShot');
+                    setActiveModal('skills');
+                  },
                 },
                 {
                   key: '[RMB]',
                   name: 'Cone-Slam',
-                  sub: hud.skills.coneSlam > 0 ? `${hud.manaCosts.slam} Mana` : 'LOCKED [K]',
+                  sub: hud.skills.unlocked.coneSlam ? `${hud.manaCosts.slam} Mana` : 'LOCKED [K]',
                   color: '#fb7185',
-                  locked: hud.skills.coneSlam <= 0,
+                  locked: !hud.skills.unlocked.coneSlam,
                   active: false,
-                  onClick: undefined,
+                  onClick: () => {
+                    setSelectedSkillKey(hud.skills.unlocked.coneSlam ? 'coneSlam' : null);
+                    setActiveModal('skills');
+                  },
                 },
                 {
                   key: '[SPATIE]',
@@ -1407,21 +1625,26 @@ export default function App() {
                   color: '#2dd4bf',
                   locked: false,
                   active: false,
-                  onClick: undefined,
+                  onClick: () => {
+                    setSelectedSkillKey('phaseDodge');
+                    setActiveModal('skills');
+                  },
                 },
                 {
                   key: '[E]',
                   name: 'Meltdown',
-                  sub:
-                    hud.skills.meltdownUlt <= 0
-                      ? 'LOCKED [K]'
-                      : hud.meltdownActive
-                      ? 'ACTIEF!'
-                      : '80% Heat',
+                  sub: !hud.skills.unlocked.meltdownUlt
+                    ? 'LOCKED [K]'
+                    : hud.meltdownActive
+                    ? 'ACTIEF!'
+                    : '80% Heat',
                   color: '#fb923c',
-                  locked: hud.skills.meltdownUlt <= 0,
-                  active: hud.skills.meltdownUlt > 0 && (hud.heat >= 80 || hud.meltdownActive),
-                  onClick: undefined,
+                  locked: !hud.skills.unlocked.meltdownUlt,
+                  active: hud.skills.unlocked.meltdownUlt && (hud.heat >= 80 || hud.meltdownActive),
+                  onClick: () => {
+                    setSelectedSkillKey(hud.skills.unlocked.meltdownUlt ? 'meltdownUlt' : null);
+                    setActiveModal('skills');
+                  },
                 },
                 {
                   key: '[I]',
@@ -1430,7 +1653,10 @@ export default function App() {
                   color: '#38bdf8',
                   locked: false,
                   active: activeModal === 'inventory',
-                  onClick: () => setActiveModal((p) => (p === 'inventory' ? 'none' : 'inventory')),
+                  onClick: () => {
+                    setSelectedSkillKey(null);
+                    setActiveModal((p) => (p === 'inventory' ? 'none' : 'inventory'));
+                  },
                 },
                 {
                   key: '[K]',
@@ -1439,7 +1665,10 @@ export default function App() {
                   color: '#2dd4bf',
                   locked: false,
                   active: hud.dnaPoints > 0 || activeModal === 'skills',
-                  onClick: () => setActiveModal((p) => (p === 'skills' ? 'none' : 'skills')),
+                  onClick: () => {
+                    setSelectedSkillKey(null);
+                    setActiveModal((p) => (p === 'skills' ? 'none' : 'skills'));
+                  },
                 },
               ].map((s) => (
                 <div
