@@ -1,4 +1,4 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 
 export interface SomaticUpgrades {
   bruteForce: number;
@@ -201,7 +201,7 @@ export class ArenaScene extends Phaser.Scene {
   private nextEnemyId = 1;
   private nextItemId = 1;
 
-  private baseMaxHp = 150;
+  private baseMaxHp = 120;
   private hp = 150;
   private maxHp = 150;
   private energy = 100;
@@ -212,7 +212,7 @@ export class ArenaScene extends Phaser.Scene {
   private xp = 0;
   private xpToNext = 100;
   private level = 1;
-  private dnaPoints = 1;
+  private dnaPoints = 0;
   private waveNumber = 1;
 
   private upgrades: SomaticUpgrades = {
@@ -324,7 +324,7 @@ export class ArenaScene extends Phaser.Scene {
       A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      Q: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+      Q: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
       SPACE: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
     };
 
@@ -1167,7 +1167,7 @@ export class ArenaScene extends Phaser.Scene {
       this.cameras.main.flash(200, 45, 212, 191, false);
       this.showFloatingText(enemy.sprite.x, enemy.sprite.y - 44, 'EXTRACTION PORTAL UNLOCKED!', '#2dd4bf');
     } else if (enemy.isElite) {
-      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < 0.3 ? 'EXOTIC' : 'RARE');
+      this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y, Math.random() < 0.18 ? 'EXOTIC' : 'RARE');
     } else if (Math.random() < 0.28) {
       this.spawnLootDrop(enemy.sprite.x, enemy.sprite.y);
     }
