@@ -6,297 +6,345 @@ import {
   type SomaticUpgrades,
   type LootItem,
   type ItemSlot,
+  type ItemRarity,
 } from './core/ArenaScene';
 
-// â”€â”€â”€ Initial HUD state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 const initialHud: HudSnapshot = {
-  hp: 150, maxHp: 150,
-  energy: 100, maxEnergy: 100,
-  heat: 20, meltdownActive: false,
-  xp: 0, xpToNext: 100,
-  level: 1, dnaPoints: 1,
-  packNumber: 1, enemiesRemaining: 0,
+  hp: 150,
+  maxHp: 150,
+  energy: 100,
+  maxEnergy: 100,
+  heat: 20,
+  meltdownActive: false,
+  xp: 0,
+  xpToNext: 100,
+  level: 1,
+  dnaPoints: 1,
+  packNumber: 1,
+  enemiesRemaining: 20,
   cooldowns: { slam: 0, dash: 0 },
   upgrades: { bruteForce: 0, flexibleMass: 0, isotopeCore: 0 },
+  equipped: { WEAPON: null, ARMOR: null, INJECTOR: null },
   inventory: [],
-  equipped: {},
 };
 
-// â”€â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const rarityStyles: Record<ItemRarity, { border: string; badge: string; text: string }> = {
+  COMMON: {
+    border: 'border-emerald-500/40 bg-emerald-950/20',
+    badge: 'bg-emerald-500/20 text-emerald-300',
+    text: 'text-emerald-300',
+  },
+  RARE: {
+    border: 'border-sky-500/50 bg-sky-950/25',
+    badge: 'bg-sky-500/20 text-sky-300',
+    text: 'text-sky-300',
+  },
+  EXOTIC: {
+    border: 'border-amber-500/60 bg-amber-950/25',
+    badge: 'bg-amber-500/20 text-amber-300',
+    text: 'text-amber-300',
+  },
+};
 
-export function App() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef     = useRef<ArenaScene | null>(null);
-  // Keep a ref to the Phaser.Game instance so React StrictMode's double-invoke
-  // doesn't create two games (the cleanup destroys the first, guard blocks a third).
-  const gameRef = useRef<Phaser.Game | null>(null);
+const slotLabels: Record<ItemSlot, string> = {
+  WEAPON: 'Bio-Emitter',
+  ARMOR: 'Carapace',
+  INJECTOR: 'Splicer Injector',
+};
+
+export default function App() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const sceneRef = useRef<ArenaScene | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(initialHud);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    // Strict-mode guard: if a game already exists for this mount, skip
-    if (gameRef.current) return;
 
     const arenaScene = new ArenaScene();
     arenaScene.setHudCallback((snapshot) => setHud(snapshot));
     sceneRef.current = arenaScene;
 
-    gameRef.current = new Phaser.Game({
+    const game = new Phaser.Game({
       type: Phaser.AUTO,
+      parent: containerRef.current,
       width: 960,
       height: 680,
-      backgroundColor: '#0b101b',   // set at renderer level, not just camera
-      parent: containerRef.current,
+      backgroundColor: '#0b101b',
       pixelArt: true,
-      physics: { default: 'arcade', arcade: { debug: false } },
       scene: [arenaScene],
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+      },
     });
 
     return () => {
-      gameRef.current?.destroy(true);
-      gameRef.current = null;
       sceneRef.current = null;
+      game.destroy(true);
     };
   }, []);
 
-  const handleSplice  = (stat: keyof SomaticUpgrades) => sceneRef.current?.applyUpgrade(stat);
-  const handleEquip   = (id: number) => sceneRef.current?.equipItem(id);
-  const handleSalvage = (id: number) => sceneRef.current?.salvageItem(id);
+  const handleSplice = (stat: keyof SomaticUpgrades) => {
+    sceneRef.current?.applyUpgrade(stat);
+  };
+
+  const handleEquip = (itemId: string) => {
+    sceneRef.current?.equipItem(itemId);
+  };
+
+  const handleSalvage = (itemId: string) => {
+    sceneRef.current?.salvageItem(itemId);
+  };
+
+  const hpPct = Math.max(0, Math.min(100, (hud.hp / Math.max(1, hud.maxHp)) * 100));
+  const energyPct = Math.max(0, Math.min(100, (hud.energy / Math.max(1, hud.maxEnergy)) * 100));
+  const xpPct = Math.max(0, Math.min(100, (hud.xp / Math.max(1, hud.xpToNext)) * 100));
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f8fafc', fontFamily: 'system-ui, sans-serif', padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-3 select-none">
+      <div className="w-full max-w-[1320px] flex flex-col gap-3">
+        <header className="text-center">
+          <p className="text-xs font-mono tracking-[0.25em] text-sky-400 uppercase">
+            LINEAR SECTOR RUN &bull; DEPTH #{hud.packNumber} ({hud.enemiesRemaining} HOSTILES)
+          </p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">Spliced: Meltdown</h1>
+        </header>
 
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '14px' }}>
-        <div style={{ fontSize: '12px', letterSpacing: '2px', color: '#38bdf8', fontWeight: 700 }}>
-          ARPG COMBAT LOOP â€¢ WAVE #{hud.packNumber} ({hud.enemiesRemaining} ENEMIES)
-        </div>
-        <h1 style={{ margin: '4px 0', fontSize: '28px', fontWeight: 800 }}>Spliced: Meltdown</h1>
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-3 items-start">
+          <div
+            ref={containerRef}
+            className="w-full aspect-[960/680] rounded-xl overflow-hidden border border-slate-800 bg-[#0b101b] shadow-2xl"
+          />
 
-      {/* Main layout */}
-      <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center' }}>
-
-        {/* Left column: canvas + skill bar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div ref={containerRef} style={{ border: '2px solid #1e293b', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.6)' }} />
-
-          {/* Skill bar */}
-          <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-
-            {/* HP & Energy bars */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '220px' }}>
-              <ResourceBar label="VITALITY (HP)" value={hud.hp} max={hud.maxHp} color="#22c55e" textColor="#4ade80" />
-              <ResourceBar label="BIO-ENERGY"    value={hud.energy} max={hud.maxEnergy} color="#0ea5e9" textColor="#38bdf8" />
-            </div>
-
-            {/* Skill slots */}
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <SkillSlot hotkey="LMB"   name="Bio-Shot"      cost="+8 Energy" ready />
-              <SkillSlot hotkey="RMB"   name="Stretch-Slam"  cost="25 Energy"
-                ready={hud.cooldowns.slam === 0 && hud.energy >= 25} cooldownSec={hud.cooldowns.slam} />
-              <SkillSlot hotkey="Q"     name="Phase Dash"    cost="20 Energy"
-                ready={hud.cooldowns.dash === 0 && hud.energy >= 20} cooldownSec={hud.cooldowns.dash} />
-              <SkillSlot hotkey="SPACE" name="Meltdown"      cost={`${hud.heat}% Heat`}
-                ready={hud.heat >= 80 || hud.meltdownActive} highlight={hud.heat >= 80 || hud.meltdownActive} />
-            </div>
-
-            {/* Heat bar */}
-            <div style={{ width: '100px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, marginBottom: '3px' }}>
-                <span style={{ color: '#f97316' }}>HEAT</span>
-                <span>{hud.heat}%</span>
-              </div>
-              <div style={{ height: '8px', backgroundColor: '#1e293b', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: `${hud.heat}%`, height: '100%',
-                  backgroundColor: hud.heat >= 80 ? '#ef4444' : hud.meltdownActive ? '#f97316' : '#78716c',
-                  transition: 'width 0.1s' }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right column: DNA + Gear panels */}
-        <div style={{ width: '310px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-          {/* XP & DNA */}
-          <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '17px', fontWeight: 800 }}>Rank Level {hud.level}</span>
-              {hud.dnaPoints > 0 && (
-                <span style={{ backgroundColor: '#7e22ce', color: '#f3e8ff', fontSize: '12px', fontWeight: 700, padding: '3px 8px', borderRadius: '999px' }}>
+          <aside className="flex flex-col gap-3">
+            <section className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-bold text-base">Rank Level {hud.level}</span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-600/30 text-purple-300 border border-purple-500/40">
                   {hud.dnaPoints} DNA Punt(en)
                 </span>
+              </div>
+              <div className="text-xs text-slate-400 mb-1.5">
+                XP: {hud.xp} / {hud.xpToNext}
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden mb-3">
+                <div className="h-full bg-purple-500 transition-all" style={{ width: `${xpPct}%` }} />
+              </div>
+
+              <p className="text-[11px] font-mono tracking-wider text-slate-400 uppercase mb-2">
+                Somatic DNA Overrides
+              </p>
+              <div className="flex flex-col gap-2">
+                <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-rose-200">
+                      Brute Force (Rank {hud.upgrades.bruteForce})
+                    </span>
+                    <button
+                      onClick={() => handleSplice('bruteForce')}
+                      disabled={hud.dnaPoints <= 0}
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-600 hover:bg-rose-500 disabled:opacity-40 cursor-pointer"
+                    >
+                      + Splice
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">+35 Max HP, +22 Slam DMG &amp; +14px radius</p>
+                </div>
+
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-200">
+                      Flexible Mass (Rank {hud.upgrades.flexibleMass})
+                    </span>
+                    <button
+                      onClick={() => handleSplice('flexibleMass')}
+                      disabled={hud.dnaPoints <= 0}
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 cursor-pointer"
+                    >
+                      + Splice
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">Sneller lopen &amp; schieten, kortere Q-Dash</p>
+                </div>
+
+                <div className="rounded-lg border border-sky-500/30 bg-sky-950/20 p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-sky-200">
+                      Isotope Core (Rank {hud.upgrades.isotopeCore})
+                    </span>
+                    <button
+                      onClick={() => handleSplice('isotopeCore')}
+                      disabled={hud.dnaPoints <= 0}
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-sky-600 hover:bg-sky-500 disabled:opacity-40 cursor-pointer"
+                    >
+                      + Splice
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">+9 Bio-Shot DMG &amp; sterkere Meltdown aura</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5">
+              <p className="text-[11px] font-mono tracking-wider text-slate-400 uppercase mb-2">
+                Somatic Gear (Equipped)
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {(['WEAPON', 'ARMOR', 'INJECTOR'] as ItemSlot[]).map((slot) => {
+                  const item = hud.equipped[slot];
+                  return (
+                    <div
+                      key={slot}
+                      className={`rounded-lg border px-2.5 py-2 text-xs ${
+                        item ? rarityStyles[item.rarity].border : 'border-slate-800 bg-slate-950/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase text-slate-400">{slotLabels[slot]}</span>
+                        {item && (
+                          <span className={`text-[10px] px-1.5 rounded font-bold ${rarityStyles[item.rarity].badge}`}>
+                            {item.rarity}
+                          </span>
+                        )}
+                      </div>
+                      {item ? (
+                        <div className="mt-0.5">
+                          <div className={`font-semibold ${rarityStyles[item.rarity].text}`}>{item.name}</div>
+                          <div className="text-[11px] text-slate-300">{item.description}</div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-600 italic text-[11px]">&mdash; leeg &mdash;</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-mono tracking-wider text-slate-400 uppercase">Rugzak</p>
+                <span className="text-xs font-mono text-slate-400">{hud.inventory.length} / 12</span>
+              </div>
+
+              {hud.inventory.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-3">
+                  Geen loot &mdash; loop over orbs om op te pakken
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                  {hud.inventory.map((item: LootItem) => (
+                    <div
+                      key={item.id}
+                      className={`rounded-lg border p-2 text-xs flex items-center justify-between gap-2 ${
+                        rarityStyles[item.rarity].border
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className={`font-semibold truncate ${rarityStyles[item.rarity].text}`}>
+                          {item.name}
+                        </div>
+                        <div className="text-[10px] text-slate-300 truncate">{item.description}</div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleEquip(item.id)}
+                          className="px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-[10px] font-bold text-white cursor-pointer"
+                        >
+                          Equip
+                        </button>
+                        <button
+                          onClick={() => handleSalvage(item.id)}
+                          title="Salvage voor XP"
+                          className="px-1.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 cursor-pointer"
+                        >
+                          XP
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 6px' }}>
-              XP: {hud.xp} / {hud.xpToNext}
-            </div>
-            <div style={{ height: '8px', backgroundColor: '#1e293b', borderRadius: '4px', overflow: 'hidden' }}>
-              <div style={{ width: `${(hud.xp / hud.xpToNext) * 100}%`, height: '100%', backgroundColor: '#a855f7' }} />
-            </div>
+            </section>
+          </aside>
+        </div>
 
-            <hr style={{ borderColor: '#1e293b', margin: '12px 0 10px' }} />
-
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#cbd5e1', letterSpacing: '0.5px', marginBottom: '8px' }}>
-              SOMATIC DNA OVERRIDES
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <MutationNode title="Brute Force"    rank={hud.upgrades.bruteForce}    desc="+35 Max HP, +22 Slam DMG & +12px radius"
-                canUpgrade={hud.dnaPoints > 0} onUpgrade={() => handleSplice('bruteForce')}    accent="#ef4444" />
-              <MutationNode title="Flexible Mass"  rank={hud.upgrades.flexibleMass}  desc="Sneller lopen & schieten, kortere Q-Dash"
-                canUpgrade={hud.dnaPoints > 0} onUpgrade={() => handleSplice('flexibleMass')}  accent="#10b981" />
-              <MutationNode title="Isotope Core"   rank={hud.upgrades.isotopeCore}   desc="+9 Bio-Shot DMG & sterkere Meltdown aura"
-                canUpgrade={hud.dnaPoints > 0} onUpgrade={() => handleSplice('isotopeCore')}   accent="#06b6d4" />
-            </div>
-          </div>
-
-          {/* Gear Slots */}
-          <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#cbd5e1', letterSpacing: '0.5px', marginBottom: '10px' }}>
-              SOMATIC GEAR (EQUIPPED)
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {(['WEAPON', 'ARMOR', 'INJECTOR'] as type ItemSlot[]).map(slot => (
-                <GearSlot key={slot} slot={slot} item={hud.equipped[slot]} />
-              ))}
-            </div>
-          </div>
-
-          {/* Loot Inventory */}
-          <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#cbd5e1', letterSpacing: '0.5px' }}>
-                RUGZAK
-              </span>
-              <span style={{ fontSize: '11px', color: '#64748b' }}>
-                {hud.inventory.length} / 12
-              </span>
-            </div>
-            {hud.inventory.length === 0 ? (
-              <div style={{ fontSize: '12px', color: '#475569', textAlign: 'center', padding: '12px 0' }}>
-                Geen loot â€” loop over orbs om op te pakken
+        <footer className="rounded-xl border border-slate-800 bg-slate-900/90 p-3 grid grid-cols-1 md:grid-cols-[240px_1fr_200px] gap-4 items-center">
+          <div className="flex flex-col gap-2">
+            <div>
+              <div className="flex justify-between text-xs font-bold mb-1">
+                <span className="text-emerald-400">VITALITY (HP)</span>
+                <span>
+                  {hud.hp} / {hud.maxHp}
+                </span>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '220px', overflowY: 'auto' }}>
-                {hud.inventory.map(item => (
-                  <InventoryRow key={item.id} item={item} onEquip={handleEquip} onSalvage={handleSalvage} />
-                ))}
+              <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${hpPct}%` }} />
               </div>
-            )}
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs font-bold mb-1">
+                <span className="text-sky-400">BIO-ENERGY</span>
+                <span>
+                  {hud.energy} / {hud.maxEnergy}
+                </span>
+              </div>
+              <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                <div className="h-full bg-sky-500 transition-all" style={{ width: `${energyPct}%` }} />
+              </div>
+            </div>
           </div>
 
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function ResourceBar({ label, value, max, color, textColor }: {
-  label: string; value: number; max: number; color: string; textColor: string;
-}) {
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, marginBottom: '3px' }}>
-        <span style={{ color: textColor }}>{label}</span>
-        <span>{value} / {max}</span>
-      </div>
-      <div style={{ height: '10px', backgroundColor: '#1e293b', borderRadius: '4px', overflow: 'hidden' }}>
-        <div style={{ width: `${(value / max) * 100}%`, height: '100%', backgroundColor: color, transition: 'width 0.1s' }} />
-      </div>
-    </div>
-  );
-}
-
-function SkillSlot({ hotkey, name, cost, ready, cooldownSec = 0, highlight = false }: {
-  hotkey: string; name: string; cost: string; ready: boolean; cooldownSec?: number; highlight?: boolean;
-}) {
-  return (
-    <div style={{
-      width: '88px', padding: '8px', borderRadius: '6px', textAlign: 'center',
-      backgroundColor: highlight ? '#164e63' : ready ? '#1e293b' : '#090d16',
-      border: `1px solid ${highlight ? '#22d3ee' : ready ? '#334155' : '#1e293b'}`,
-      opacity: ready ? 1 : 0.55,
-    }}>
-      <div style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8' }}>[{hotkey}]</div>
-      <div style={{ fontSize: '12px', fontWeight: 700, margin: '2px 0' }}>{name}</div>
-      <div style={{ fontSize: '10px', color: '#94a3b8' }}>{cooldownSec > 0 ? `${cooldownSec.toFixed(1)}s` : cost}</div>
-    </div>
-  );
-}
-
-function MutationNode({ title, rank, desc, canUpgrade, onUpgrade, accent }: {
-  title: string; rank: number; desc: string; canUpgrade: boolean; onUpgrade: () => void; accent: string;
-}) {
-  return (
-    <div style={{ backgroundColor: '#1e293b', padding: '8px 12px', borderRadius: '6px', borderLeft: `4px solid ${accent}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, fontSize: '13px' }}>{title} (Rank {rank})</span>
-        <button onClick={onUpgrade} disabled={!canUpgrade} style={{
-          backgroundColor: canUpgrade ? accent : '#334155', color: '#fff',
-          border: 'none', borderRadius: '4px', padding: '3px 8px',
-          fontSize: '11px', fontWeight: 700, cursor: canUpgrade ? 'pointer' : 'not-allowed',
-        }}>
-          + Splice
-        </button>
-      </div>
-      <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '3px' }}>{desc}</div>
-    </div>
-  );
-}
-
-const SLOT_ICON: Record<ItemSlot, string> = { WEAPON: 'âš”', ARMOR: 'ðŸ›¡', INJECTOR: 'ðŸ’‰' };
-const RARITY_CSS: Record<string, string> = { COMMON: '#94a3b8', RARE: '#60a5fa', EXOTIC: '#f59e0b' };
-
-function GearSlot({ slot, item }: { slot: ItemSlot; item?: LootItem }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1e293b', borderRadius: '6px', padding: '7px 10px', border: '1px solid #334155' }}>
-      <span style={{ fontSize: '16px', width: '20px', textAlign: 'center' }}>{SLOT_ICON[slot]}</span>
-      {item ? (
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: RARITY_CSS[item.rarity], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {item.name}
+          <div className="grid grid-cols-4 gap-2">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2 text-center">
+              <div className="text-[10px] font-mono text-sky-400">[LMB]</div>
+              <div className="text-xs font-bold">Bio-Shot</div>
+              <div className="text-[10px] text-slate-400">+8 Energy</div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2 text-center">
+              <div className="text-[10px] font-mono text-rose-400">[RMB]</div>
+              <div className="text-xs font-bold">Stretch-Slam</div>
+              <div className="text-[10px] text-slate-400">
+                {hud.cooldowns.slam > 0 ? `${hud.cooldowns.slam}s` : '25 Energy'}
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2 text-center">
+              <div className="text-[10px] font-mono text-teal-400">[Q]</div>
+              <div className="text-xs font-bold">Phase Dash</div>
+              <div className="text-[10px] text-slate-400">
+                {hud.cooldowns.dash > 0 ? `${hud.cooldowns.dash}s` : '20 Energy'}
+              </div>
+            </div>
+            <div
+              className={`rounded-lg border p-2 text-center ${
+                hud.heat >= 80 || hud.meltdownActive
+                  ? 'border-orange-500 bg-orange-950/40'
+                  : 'border-slate-800 bg-slate-950/70'
+              }`}
+            >
+              <div className="text-[10px] font-mono text-orange-400">[SPACE]</div>
+              <div className="text-xs font-bold">Meltdown</div>
+              <div className="text-[10px] text-slate-400">{hud.meltdownActive ? 'ACTIEF!' : '80% Heat'}</div>
+            </div>
           </div>
-          <div style={{ fontSize: '10px', color: '#64748b' }}>
-            {Object.entries(item.stats).map(([k, v]) => `${k}: +${v}`).join(' | ')}
+
+          <div>
+            <div className="flex justify-between text-xs font-bold mb-1">
+              <span className="text-orange-400">HEAT</span>
+              <span>{hud.heat}%</span>
+            </div>
+            <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full transition-all ${
+                  hud.meltdownActive ? 'bg-orange-400 animate-pulse' : 'bg-orange-500'
+                }`}
+                style={{ width: `${hud.heat}%` }}
+              />
+            </div>
           </div>
-        </div>
-      ) : (
-        <span style={{ fontSize: '11px', color: '#475569' }}>â€” leeg â€”</span>
-      )}
-    </div>
-  );
-}
-
-function InventoryRow({ item, onEquip, onSalvage }: {
-  item: LootItem; onEquip: (id: number) => void; onSalvage: (id: number) => void;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#1e293b', borderRadius: '6px', padding: '5px 8px', border: `1px solid ${RARITY_CSS[item.rarity]}44` }}>
-      <span style={{ fontSize: '14px', width: '18px', textAlign: 'center', flexShrink: 0 }}>{SLOT_ICON[item.slot]}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: RARITY_CSS[item.rarity], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {item.name}
-        </div>
-        <div style={{ fontSize: '10px', color: '#64748b' }}>
-          {item.rarity} Â· {Object.entries(item.stats).map(([k, v]) => `${k}:+${v}`).join(' ')}
-        </div>
+        </footer>
       </div>
-      <button onClick={() => onEquip(item.id)} style={btnStyle('#0f4c81', '#3b82f6')}>Equip</button>
-      <button onClick={() => onSalvage(item.id)} style={btnStyle('#4a1d4b', '#a855f7')}>Salvage</button>
     </div>
   );
 }
-
-function btnStyle(bg: string, border: string): React.CSSProperties {
-  return {
-    backgroundColor: bg, color: '#f8fafc', border: `1px solid ${border}`,
-    borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 700,
-    cursor: 'pointer', flexShrink: 0,
-  };
-}
-
-export default App;
