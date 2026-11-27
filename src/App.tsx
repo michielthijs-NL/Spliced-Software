@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import {
   ArenaScene,
@@ -8,7 +8,7 @@ import {
   type ItemSlot,
 } from './core/ArenaScene';
 
-// ─── Initial HUD state ────────────────────────────────────────────────────────
+// â”€â”€â”€ Initial HUD state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const initialHud: HudSnapshot = {
   hp: 150, maxHp: 150,
@@ -23,7 +23,7 @@ const initialHud: HudSnapshot = {
   equipped: {},
 };
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,7 +70,7 @@ export function App() {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '14px' }}>
         <div style={{ fontSize: '12px', letterSpacing: '2px', color: '#38bdf8', fontWeight: 700 }}>
-          ARPG COMBAT LOOP • WAVE #{hud.packNumber} ({hud.enemiesRemaining} ENEMIES)
+          ARPG COMBAT LOOP â€¢ WAVE #{hud.packNumber} ({hud.enemiesRemaining} ENEMIES)
         </div>
         <h1 style={{ margin: '4px 0', fontSize: '28px', fontWeight: 800 }}>Spliced: Meltdown</h1>
       </div>
@@ -176,7 +176,7 @@ export function App() {
             </div>
             {hud.inventory.length === 0 ? (
               <div style={{ fontSize: '12px', color: '#475569', textAlign: 'center', padding: '12px 0' }}>
-                Geen loot — loop over orbs om op te pakken
+                Geen loot â€” loop over orbs om op te pakken
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '220px', overflowY: 'auto' }}>
@@ -193,7 +193,7 @@ export function App() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ResourceBar({ label, value, max, color, textColor }: {
   label: string; value: number; max: number; color: string; textColor: string;
@@ -248,7 +248,7 @@ function MutationNode({ title, rank, desc, canUpgrade, onUpgrade, accent }: {
   );
 }
 
-const SLOT_ICON: Record<ItemSlot, string> = { WEAPON: '⚔', ARMOR: '🛡', INJECTOR: '💉' };
+const SLOT_ICON: Record<ItemSlot, string> = { WEAPON: 'âš”', ARMOR: 'ðŸ›¡', INJECTOR: 'ðŸ’‰' };
 const RARITY_CSS: Record<string, string> = { COMMON: '#94a3b8', RARE: '#60a5fa', EXOTIC: '#f59e0b' };
 
 function GearSlot({ slot, item }: { slot: ItemSlot; item?: LootItem }) {
@@ -265,7 +265,7 @@ function GearSlot({ slot, item }: { slot: ItemSlot; item?: LootItem }) {
           </div>
         </div>
       ) : (
-        <span style={{ fontSize: '11px', color: '#475569' }}>— leeg —</span>
+        <span style={{ fontSize: '11px', color: '#475569' }}>â€” leeg â€”</span>
       )}
     </div>
   );
@@ -282,7 +282,7 @@ function InventoryRow({ item, onEquip, onSalvage }: {
           {item.name}
         </div>
         <div style={{ fontSize: '10px', color: '#64748b' }}>
-          {item.rarity} · {Object.entries(item.stats).map(([k, v]) => `${k}:+${v}`).join(' ')}
+          {item.rarity} Â· {Object.entries(item.stats).map(([k, v]) => `${k}:+${v}`).join(' ')}
         </div>
       </div>
       <button onClick={() => onEquip(item.id)} style={btnStyle('#0f4c81', '#3b82f6')}>Equip</button>
